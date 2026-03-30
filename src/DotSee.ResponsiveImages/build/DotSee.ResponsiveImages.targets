@@ -1,0 +1,11 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemGroup>
+		<DotSeeResponsiveImagesFiles Include="$(MSBuildThisFileDirectory)..\content\DotSee.ResponsiveImages\**\*.*" />
+	</ItemGroup>
+
+	<Target Name="DotSeeResponsiveImagesCopyFiles" BeforeTargets="BeforeBuild">
+		<Copy 
+			SourceFiles="@(DotSeeResponsiveImagesFiles)" 
+			DestinationFiles="@(DotSeeResponsiveImagesFiles->'$(MSBuildProjectDirectory)\App_Plugins\DotSee.ResponsiveImages\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="false" />
+	</Target>
+</Project>

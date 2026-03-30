@@ -1,0 +1,8 @@
+﻿namespace DotSee.ResponsiveImages
+{
+    public class Focalpoint
+    {
+        public float left { get; set; }
+        public float top { get; set; }
+    }
+}

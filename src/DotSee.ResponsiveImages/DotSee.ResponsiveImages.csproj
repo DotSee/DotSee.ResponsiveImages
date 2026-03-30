@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Version>17.01</Version>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	</PropertyGroup>
+	<PropertyGroup>
+		<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+		<DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+		<IncludeBuildOutput>true</IncludeBuildOutput>
+		<EnableDefaultContentItems>false</EnableDefaultContentItems>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="App_Plugins\DotSee.ResponsiveImages\**\*.*" PackagePath="content\DotSee.ResponsiveImages">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+			<Pack>true</Pack>
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Include="Views\**\*.*" PackagePath="content\DotSee.ResponsiveImages.Views">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+			<Pack>true</Pack>
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Include="build\DotSee.ResponsiveImages.targets" PackagePath="buildTransitive">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+			<Pack>true</Pack>
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Include="build\DotSee.ResponsiveImages.targets" PackagePath="build">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+			<Pack>true</Pack>
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+
+	</ItemGroup>
+  <ItemGroup>
+    <Content Update="App_Plugins\DotSee.ResponsiveImages\Sample.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Smidge" Version="4.6.0" />
+    <PackageReference Include="Umbraco.Cms.Core" Version="17.1.0" />
+    <PackageReference Include="Umbraco.Cms.Web.Common" Version="17.1.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Themelion.Core\Themelion.Core.csproj" />
+  </ItemGroup>
+
+
+  <!--Set this to true ModelsBuilder mode is not PureLive -->
+  <PropertyGroup>
+    <RazorCompileOnBuild>false</RazorCompileOnBuild>
+    <ApplicationIcon />
+    <OutputType>Library</OutputType>
+    <StartupObject />
+	  <IsPackable>true</IsPackable>
+  </PropertyGroup>
+</Project>
