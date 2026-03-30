@@ -7,8 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Themelion.Core.Common;
-using Themelion.Core.Common.Services.CacheService;
+using DotSee.ResponsiveImages.Caching;
 using Umbraco.Cms.Core.Media;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.PublishedContent;
@@ -71,7 +70,7 @@ namespace DotSee.ResponsiveImages
 
             if (_configuration.GetValue<bool>("useWebP"))
             {
-                optionalQueryStringParameters = Utils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
+                optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }
 
             //Exit early conditions
@@ -134,7 +133,7 @@ namespace DotSee.ResponsiveImages
         {
             if (_configuration.GetValue<bool>("useWebP"))
             {
-                optionalQueryStringParameters = Utils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
+                optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }
 
             if (string.IsNullOrWhiteSpace(imageAlt) && string.IsNullOrEmpty(imageClass) && imageAttributes == null)

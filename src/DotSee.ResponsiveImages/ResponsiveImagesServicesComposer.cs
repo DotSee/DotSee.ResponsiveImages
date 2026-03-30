@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using DotSee.ResponsiveImages.Caching;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.Extensions.Configuration;
@@ -28,6 +29,8 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Services.AddTransient<CssRenderer>();
         builder.Services.AddTransient<ImageUrlService>();
         builder.Services.AddTransient<PictureElementRenderer>();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddSingleton<ICacheService, CacheService>();
         builder.Services.AddSmidge();
     }
 }

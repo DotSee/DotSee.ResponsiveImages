@@ -5,6 +5,13 @@ namespace DotSee.ResponsiveImages
 {
     public static class StringUtils
     {
+        public static string UpdateQueryString(string queryString, string key, string value)
+        {
+            var qs = HttpUtility.ParseQueryString(queryString ?? string.Empty);
+            qs[key] = value;
+            return qs.ToString();
+        }
+
         public static string RemoveQueryStringByKey(string url, string key)
         {
             if (!url.StartsWith("http")) { url = "http://localhost" + url; }

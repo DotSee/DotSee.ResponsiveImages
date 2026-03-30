@@ -2,7 +2,7 @@
 using System.Linq;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
-using Themelion.Core.Common.Services.CacheService;
+using DotSee.ResponsiveImages.Caching;
 using Umbraco.Cms.Core.Models;
 
 namespace DotSee.ResponsiveImages

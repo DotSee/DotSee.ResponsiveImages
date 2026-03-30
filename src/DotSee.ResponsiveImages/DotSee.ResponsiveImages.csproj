@@ -44,9 +44,8 @@
     <PackageReference Include="Umbraco.Cms.Core" Version="17.1.0" />
     <PackageReference Include="Umbraco.Cms.Web.Common" Version="17.1.0" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Themelion.Core\Themelion.Core.csproj" />
-  </ItemGroup>
+  <!-- Themelion.Core project reference removed - dependencies being inlined -->
+
 
 
   <!--Set this to true ModelsBuilder mode is not PureLive -->

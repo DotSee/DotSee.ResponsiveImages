@@ -6,7 +6,7 @@ using System.Text;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.AspNetCore.Html;
-using Themelion.Core.Common.Services.CacheService;
+using DotSee.ResponsiveImages.Caching;
 using Umbraco.Cms.Core.Media;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Routing;
