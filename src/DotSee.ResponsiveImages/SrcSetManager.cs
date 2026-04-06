@@ -1,13 +1,13 @@
-﻿using DotSee.ResponsiveImages.LazyLoad;
+﻿using DotSee.ResponsiveImages.Caching;
+using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.AspNetCore.Html;
 using Microsoft.Extensions.Configuration;
-using Smidge;
+//using Smidge;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using DotSee.ResponsiveImages.Caching;
 using Umbraco.Cms.Core.Media;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.PublishedContent;
@@ -25,7 +25,7 @@ namespace DotSee.ResponsiveImages
         private readonly IGlobalLazyLoadSettings _lazyLoadSettings;
         private readonly PictureElementRenderer _pictureElementRenderer;
         private readonly BackgroundImageModelManager _backgroundImageModelManager;
-        private readonly SmidgeHelper _smidgeHelper;
+        //private readonly SmidgeHelper _smidgeHelper;
         private readonly ICacheService _cacheService;
         private readonly IConfiguration _configuration;
 
@@ -40,7 +40,7 @@ namespace DotSee.ResponsiveImages
             , PictureElementRenderer pictureElementRenderer
             , BackgroundImageModelManager backgroundImageModelManager
             , IGlobalLazyLoadSettings lazyLoadSettings
-            , SmidgeHelper smidgeHelper
+            //, SmidgeHelper smidgeHelper
             , ICacheService cacheService
             , IConfiguration configuration
             )
@@ -53,9 +53,9 @@ namespace DotSee.ResponsiveImages
             _backgroundImageModelManager = backgroundImageModelManager;
             _pictureElementRenderer = pictureElementRenderer;
             _lazyLoadSettings = lazyLoadSettings;
-            _smidgeHelper = smidgeHelper;
-            _smidgeHelper.RequiresJs("/_content/Themelion.CoreViews/scripts/lazysizes.js");
-            _smidgeHelper.RequiresJs("/_content/Themelion.CoreViews/scripts/ls.blur-up.min.js");
+            //_smidgeHelper = smidgeHelper;
+            //_smidgeHelper.RequiresJs("/_content/Themelion.CoreViews/scripts/lazysizes.js");
+            //_smidgeHelper.RequiresJs("/_content/Themelion.CoreViews/scripts/ls.blur-up.min.js");
 
             _cacheService = cacheService;
             _configuration = configuration;

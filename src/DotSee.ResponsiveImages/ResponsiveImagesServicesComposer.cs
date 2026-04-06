@@ -1,10 +1,9 @@
-﻿using System.Collections.Generic;
-using DotSee.ResponsiveImages.Caching;
+﻿using DotSee.ResponsiveImages.Caching;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Smidge;
+using System.Collections.Generic;
 using Umbraco.Cms.Core.Composing;
 using Umbraco.Cms.Core.DependencyInjection;
 
@@ -19,7 +18,7 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Config.Bind("lazyload", globalLazySettings);
         builder.Services.AddSingleton<IGlobalLazyLoadSettings>(globalLazySettings);
         builder.Services.AddTransient<BackgroundImageModelManager>();
-        
+
         // read Responsive Images from appSettings
         builder.Services.Configure<List<RuleSet>>(
             builder.Config.GetSection("DotSee:ResponsiveImages")
@@ -31,6 +30,6 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Services.AddTransient<PictureElementRenderer>();
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<ICacheService, CacheService>();
-        builder.Services.AddSmidge();
+        //builder.Services.AddSmidge();
     }
 }
