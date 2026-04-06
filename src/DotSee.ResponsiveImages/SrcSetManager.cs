@@ -185,31 +185,29 @@ namespace DotSee.ResponsiveImages
             sb.Append(string.Join(",", config.SrcSetEntries.OrderBy(x => x.Breakpoint).Select(x => x.ImageUrl)));
             sb.Append("\"");
             sb.Append(" sizes=\"");
-            if (_overriddenLazyLoad)
-            {
-                sb.Append("auto");
-            }
-            else
-            {
-                sb.Append(string.Join(",", config.SizeEntries));
-                sb.Append(", " + maxWidth.ToString() + Enum.GetName(typeof(SizeType), SizeType.px));
-            }
+            sb.Append(string.Join(",", config.SizeEntries));
+            sb.Append(", " + maxWidth.ToString() + Enum.GetName(typeof(SizeType), SizeType.px));
             sb.Append("\" ");
 
             sb.Append("src=\"");
-            if (_overriddenLazyLoad && _lazyLoadSettings.PreviewType == PreviewType.Blur)
-            {
-                sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: 1, imageCropMode: ruleSet.CropMode));
-            }
-            else if (_overriddenLazyLoad && _lazyLoadSettings.PreviewType == PreviewType.LowResImage)
-            {
-                sb.Append(_lazyLoadSettings.LowResImagePath);
-            }
-            else
-            {
-                sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode));
-            }
+            sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode));
             sb.Append("\"");
+
+            if (_overriddenLazyLoad)
+            {
+                if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
+                {
+                    var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode);
+                    sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s\"");
+                    sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
+                }
+                else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
+                    && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
+                {
+                    sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
+                    sb.Append(" onload=\"this.style.backgroundImage='none'\"");
+                }
+            }
             sb.Append(Helpers.CreateAttribute("alt", alt));
             sb.Append(Helpers.CreateAttribute("title", title));
             if (otherAttributes != null)
@@ -222,35 +220,19 @@ namespace DotSee.ResponsiveImages
 
         private void SetLazyLoadAttributes(string srcSetAttrName, string imageClass, StringBuilder sb, bool enableLazyLoad)
         {
-            if (enableLazyLoad)
+            if (!string.IsNullOrEmpty(imageClass))
             {
-                sb.Append("class=\"lazyload");
-                if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
-                {
-                    sb.Append(" blur-up");
-                }
-                sb.Append(String.IsNullOrWhiteSpace(imageClass) ? "" : " " + imageClass);
+                sb.Append("class=\"");
+                sb.Append(imageClass);
                 sb.Append("\" ");
-                sb.Append(" loading=\"lazy\"");
-            }
-            else
-            {
-                if (!string.IsNullOrEmpty(imageClass))
-                {
-                    sb.Append("class=\"");
-                    sb.Append(imageClass);
-                    sb.Append("\" ");
-                }
             }
 
             if (enableLazyLoad)
             {
-                sb.Append("data-srcset");
+                sb.Append("loading=\"lazy\" decoding=\"async\" ");
             }
-            else
-            {
-                sb.Append(srcSetAttrName);
-            }
+
+            sb.Append(srcSetAttrName);
         }
 
         public string GetClassName(IPublishedContent originalImage, string ruleSetName)

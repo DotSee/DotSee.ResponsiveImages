@@ -84,7 +84,6 @@ namespace DotSee.ResponsiveImages
             var config = GetPicturesqueConfig(originalImage, ruleSet, optionalQueryStringParameters);
             var orderedBreakPoints = ruleSet.Breakpoints.OrderByDescending(x => x.BreakPointWidth);
             var isLazyLoad = _lazyLoadSettings.IsLazyLoadEnabled(ruleSet);
-            string lazyPrefix = isLazyLoad ? "data-" : String.Empty;
 
             {
 
@@ -136,9 +135,9 @@ namespace DotSee.ResponsiveImages
                         + "only screen and (-o-min-device-pixel-ratio: 9/4) and (min-width: {0}px),"
                         + "only screen and (min-device-pixel-ratio: 2.25) and (min-width: {0}px),"
                         + "only screen and (min-resolution: 2.25dppx) and (min-width: {0}px)\""
-                        + " {1}srcset=\"" + mediaQueryImage3x
+                        + " srcset=\"" + mediaQueryImage3x
                         + "\" />"
-                        , bp.BreakPointWidth, lazyPrefix);
+                        , bp.BreakPointWidth);
 
                         sb.Append(mq3x);
                     }
@@ -169,9 +168,9 @@ namespace DotSee.ResponsiveImages
                         + "only screen and (-o-min-device-pixel-ratio: 5/4) and (min-width: {0}px),"
                         + "only screen and (min-device-pixel-ratio: 1.25) and (min-width: {0}px),"
                         + "only screen and (min-resolution: 1.25dppx) and (min-width: {0}px)\""
-                        + " {1}srcset=\"" + mediaQueryImage2x
+                        + " srcset=\"" + mediaQueryImage2x
                         + "\" />"
-                        , bp.BreakPointWidth, lazyPrefix);
+                        , bp.BreakPointWidth);
 
                         sb.Append(mq2x);
                     }
@@ -198,7 +197,7 @@ namespace DotSee.ResponsiveImages
                     sb.Append("\n<source ");
                     //sb.Append($"data-lowsrc=\"{_originalImage.GetCropUrl(width:bp.BreakPointWidth, quality:5)}\" ");
                     sb.Append($"media=\"only screen and (min-width: {bp.BreakPointWidth}px)\" ");
-                    sb.Append($"{lazyPrefix}srcset=\"" + mediaQueryImage1x);     //config.SrcSetEntries.Where(x => x.Breakpoint == bp.BreakPointWidth).First().ImageUrl);
+                    sb.Append("srcset=\"" + mediaQueryImage1x);     //config.SrcSetEntries.Where(x => x.Breakpoint == bp.BreakPointWidth).First().ImageUrl);
                     sb.Append("\" />");
                 }
 
@@ -208,7 +207,7 @@ namespace DotSee.ResponsiveImages
                 // set image class if exists
                 SetLazyLoadAndCssClasses(sb, isLazyLoad, imageClass);  
 
-                sb.Append($" {lazyPrefix}src=\"");
+                sb.Append(" src=\"");
                 sb.Append(originalImage.Url());
 
                 sb.Append("\"");
@@ -238,29 +237,28 @@ namespace DotSee.ResponsiveImages
             void SetLazyLoadAndCssClasses(StringBuilder sb, bool enableLazyLoad, string imageClassString)
             {
                 if (!enableLazyLoad && string.IsNullOrWhiteSpace(imageClassString)) return;
-                
-                var cssClasses = "class=\"";
-                var lazyAttr = string.Empty;
-                
+
                 if (!string.IsNullOrWhiteSpace(imageClassString))
                 {
-                    cssClasses += imageClassString + " ";
+                    sb.Append($" class=\"{imageClassString}\"");
                 }
 
                 if (enableLazyLoad)
                 {
-                    cssClasses += "lazyload";
-                    cssClasses += this._lazyLoadSettings.PreviewType == PreviewType.Blur ? " blur-up " : "";
-                    lazyAttr += " loading=\"lazy\"";
-                }
-                cssClasses += "\"";
-                cssClasses += lazyAttr;
-                
-                sb.Append(cssClasses);
-                
-                if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage)
-                {
-                    sb.Append($" src=\"{_lazyLoadSettings.LowResImagePath}\"");
+                    sb.Append(" loading=\"lazy\" decoding=\"async\"");
+
+                    if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
+                    {
+                        var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20);
+                        sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s\"");
+                        sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
+                    }
+                    else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
+                        && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
+                    {
+                        sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
+                        sb.Append(" onload=\"this.style.backgroundImage='none'\"");
+                    }
                 }
             }
 
