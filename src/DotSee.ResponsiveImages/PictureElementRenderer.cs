@@ -38,7 +38,7 @@ namespace DotSee.ResponsiveImages
             _cacheService = cacheService;
         }
 
-        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null)
+        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true)
         {
             string imageFiletype = Path.GetExtension(originalImage.Url());
             if (imageFiletype == ".svg")
@@ -205,7 +205,7 @@ namespace DotSee.ResponsiveImages
 
                 //format lazyload and override on ruleset if exists
                 // set image class if exists
-                SetLazyLoadAndCssClasses(sb, isLazyLoad, imageClass);  
+                SetLazyLoadAndCssClasses(sb, isLazyLoad, imageClass, emitInlineLqip);
 
                 sb.Append(" src=\"");
                 sb.Append(originalImage.Url());
@@ -234,7 +234,7 @@ namespace DotSee.ResponsiveImages
 
 
 
-            void SetLazyLoadAndCssClasses(StringBuilder sb, bool enableLazyLoad, string imageClassString)
+            void SetLazyLoadAndCssClasses(StringBuilder sb, bool enableLazyLoad, string imageClassString, bool emitInline)
             {
                 if (!enableLazyLoad && string.IsNullOrWhiteSpace(imageClassString)) return;
 
@@ -247,17 +247,20 @@ namespace DotSee.ResponsiveImages
                 {
                     sb.Append(" loading=\"lazy\" decoding=\"async\"");
 
-                    if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
+                    if (emitInline)
                     {
-                        var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20);
-                        sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s\"");
-                        sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
-                    }
-                    else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
-                        && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
-                    {
-                        sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
-                        sb.Append(" onload=\"this.style.backgroundImage='none'\"");
+                        if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
+                        {
+                            var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20);
+                            sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s\"");
+                            sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
+                        }
+                        else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
+                            && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
+                        {
+                            sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
+                            sb.Append(" onload=\"this.style.backgroundImage='none'\"");
+                        }
                     }
                 }
             }

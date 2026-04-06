@@ -129,25 +129,25 @@ namespace DotSee.ResponsiveImages
         /// <param name="imageAttributes"></param>
         /// <param name="optionalQueryStringParameters"> optional paramaters will get append to the final image url</param>
         /// <returns></returns>
-        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null)
+        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true)
         {
             if (_configuration.GetValue<bool>("useWebP"))
             {
                 optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }
 
-            if (string.IsNullOrWhiteSpace(imageAlt) && string.IsNullOrEmpty(imageClass) && imageAttributes == null)
+            if (string.IsNullOrWhiteSpace(imageAlt) && string.IsNullOrEmpty(imageClass) && imageAttributes == null && emitInlineLqip)
             {
                 return _cacheService.GetCachedItem(
                     "pictureelement" + originalImage.Id + ruleSetName
                     , () =>
                     {
-                        return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters);
+                        return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
                     }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
             }
             else
             {
-                return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters);
+                return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
             }
         }
 
