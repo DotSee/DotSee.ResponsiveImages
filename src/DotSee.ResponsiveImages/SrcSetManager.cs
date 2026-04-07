@@ -136,19 +136,23 @@ namespace DotSee.ResponsiveImages
                 optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }
 
-            if (string.IsNullOrWhiteSpace(imageAlt) && string.IsNullOrEmpty(imageClass) && imageAttributes == null && emitInlineLqip)
+            if (!emitInlineLqip)
             {
-                return _cacheService.GetCachedItem(
-                    "pictureelement" + originalImage.Id + ruleSetName
-                    , () =>
-                    {
-                        return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
-                    }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
-            }
-            else
-            {
+                // CSP mode generates unique data-ds-id per call, so caching is not possible
                 return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
             }
+
+            var attrsKey = imageAttributes != null
+                ? string.Join("_", imageAttributes.OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value))
+                : string.Empty;
+            var cacheKey = $"pictureelement_{originalImage.Id}_{ruleSetName}_{imageAlt}_{imageClass}_{attrsKey}_{optionalQueryStringParameters}";
+
+            return _cacheService.GetCachedItem(
+                cacheKey
+                , () =>
+                {
+                    return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
+                }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
         }
 
         public HtmlString CreateMarkup(

@@ -56,7 +56,9 @@ public HtmlString CreatePictureElement(
 
 ### Caching
 
-Results are cached for 20 minutes (sliding expiration) when `imageAlt`, `imageClass`, and `imageAttributes` are all empty/null. When any of these are set, the output is generated fresh each time.
+Results are cached for 20 minutes (sliding expiration). The cache key includes the image ID, rule set name, alt text, image class, extra attributes, and query string parameters -- so different combinations of these values are cached independently.
+
+Caching is disabled when `emitInlineLqip` is `false` (CSP mode), since each call generates a unique element identifier.
 
 ---
 
