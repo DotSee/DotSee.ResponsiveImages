@@ -3,7 +3,6 @@ using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.AspNetCore.Html;
 using Microsoft.Extensions.Configuration;
-//using Smidge;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +24,6 @@ namespace DotSee.ResponsiveImages
         private readonly IGlobalLazyLoadSettings _lazyLoadSettings;
         private readonly PictureElementRenderer _pictureElementRenderer;
         private readonly BackgroundImageModelManager _backgroundImageModelManager;
-        //private readonly SmidgeHelper _smidgeHelper;
         private readonly ICacheService _cacheService;
         private readonly IConfiguration _configuration;
 
@@ -40,7 +38,6 @@ namespace DotSee.ResponsiveImages
             , PictureElementRenderer pictureElementRenderer
             , BackgroundImageModelManager backgroundImageModelManager
             , IGlobalLazyLoadSettings lazyLoadSettings
-            //, SmidgeHelper smidgeHelper
             , ICacheService cacheService
             , IConfiguration configuration
             )

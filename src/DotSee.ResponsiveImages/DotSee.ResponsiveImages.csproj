@@ -40,7 +40,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Smidge" Version="4.6.0" />
     <PackageReference Include="Umbraco.Cms.Core" Version="17.1.0" />
     <PackageReference Include="Umbraco.Cms.Web.Common" Version="17.1.0" />
   </ItemGroup>

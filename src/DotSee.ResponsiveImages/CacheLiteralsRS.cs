@@ -4,8 +4,7 @@
     {
         public static string CachedImageCss => "RSCachedImageCssFor";
         public static string CachedImagesClassName => "RSFor_";
-       
+
         public static string Ruleset => "RSRuleSetFor";
-        public static string Config => "RSConfigFor";
     }
 }

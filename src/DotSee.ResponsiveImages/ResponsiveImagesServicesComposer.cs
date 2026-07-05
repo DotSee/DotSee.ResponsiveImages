@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Generic;
 using Umbraco.Cms.Core.Composing;
 using Umbraco.Cms.Core.DependencyInjection;
+using Umbraco.Cms.Core.Notifications;
 
 namespace DotSee.ResponsiveImages;
 
@@ -30,6 +31,12 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Services.AddTransient<PictureElementRenderer>();
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<ICacheService, CacheService>();
-        //builder.Services.AddSmidge();
+
+        // Invalidate cached image markup / CSS when content or media changes
+        builder.AddNotificationHandler<ContentPublishedNotification, ResponsiveImagesCacheInvalidator>();
+        builder.AddNotificationHandler<ContentUnpublishedNotification, ResponsiveImagesCacheInvalidator>();
+        builder.AddNotificationHandler<ContentDeletedNotification, ResponsiveImagesCacheInvalidator>();
+        builder.AddNotificationHandler<MediaSavedNotification, ResponsiveImagesCacheInvalidator>();
+        builder.AddNotificationHandler<MediaDeletedNotification, ResponsiveImagesCacheInvalidator>();
     }
 }

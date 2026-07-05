@@ -19,8 +19,7 @@ namespace DotSee.ResponsiveImages.Models
         public int ImageQuality { get; set; }
         public bool Use2x { get; set; }
         public bool Use3x { get; set; }
-        public bool Upscale { get; set; }
-        public ImageCropMode CropMode { get; set; }       
+        public ImageCropMode CropMode { get; set; }
         public bool UseBreakPointWidthIfNoWidth { get; set; }
         public bool? LazyLoad { get; set; }
     }
