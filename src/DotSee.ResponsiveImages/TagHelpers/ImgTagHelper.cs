@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
@@ -13,14 +14,14 @@ using Umbraco.Cms.Core.Models.PublishedContent;
 namespace DotSee.ResponsiveImages.TagHelpers
 {
     /// <summary>
-    /// Render any image through the Source Set Manager.
+    /// Renders a single &lt;img&gt; element with srcset and sizes attributes (via SrcSetManager.CreateMarkup).
+    /// Use this for responsive images where the browser picks the source from srcset/sizes,
+    /// rather than the art-directed &lt;picture&gt; markup produced by ds:picture.
     /// If no image is found, nothing will be rendered.
     /// </summary>
-    /// <param name="srcSet"></param>
-    /// <param name="logger"></param>
-    [HtmlTargetElement("ds:picture", Attributes = "image", TagStructure = TagStructure.NormalOrSelfClosing)]
-    public class PictureElementTagHelper(SrcSetManager srcSet,
-    ILogger<PictureElementTagHelper> logger) : TagHelper
+    [HtmlTargetElement("ds:img", Attributes = "image", TagStructure = TagStructure.NormalOrSelfClosing)]
+    public class ImgTagHelper(SrcSetManager srcSet,
+        ILogger<ImgTagHelper> logger) : TagHelper
     {
         [ViewContext]
         [HtmlAttributeNotBound]
@@ -49,7 +50,25 @@ namespace DotSee.ResponsiveImages.TagHelpers
         public string ImageAlt { get; set; }
 
         /// <summary>
-        /// Provide the HTML element to wrap the image in. If you leave this empty, it will directly output the picture element
+        /// Provide an optional title attribute for the image
+        /// </summary>
+        [HtmlAttributeName("image-title")]
+        public string ImageTitle { get; set; }
+
+        /// <summary>
+        /// Provide an optional image class for the image
+        /// </summary>
+        [HtmlAttributeName("image-class")]
+        public string ImageClass { get; set; }
+
+        /// <summary>
+        /// Override the name of the srcset attribute. Defaults to "srcset".
+        /// </summary>
+        [HtmlAttributeName("srcset-attr-name")]
+        public string SrcSetAttrName { get; set; } = "srcset";
+
+        /// <summary>
+        /// Provide the HTML element to wrap the image in. If you leave this empty, it will directly output the img element
         /// </summary>
         [HtmlAttributeName("wrapper-element")]
         public string? WrapperElement { get; set; }
@@ -61,30 +80,18 @@ namespace DotSee.ResponsiveImages.TagHelpers
         public string WrapperClass { get; set; }
 
         /// <summary>
-        /// Provide an optional image class for the image
-        /// </summary>
-        [HtmlAttributeName("image-class")]
-        public string ImageClass { get; set; }
-
-        /// <summary>
         /// Set this to true to render friendly error messages in the output
         /// </summary>
         [HtmlAttributeName("suppress-warnings")]
         public bool SuppressWarnings { get; set; }
 
         /// <summary>
-        /// Additional HTML attributes to render on the fallback img element.
+        /// Additional HTML attributes to render on the img element.
         /// Supply them individually with the attr- prefix (e.g. attr-fetchpriority="high", attr-id="hero")
         /// or as a whole dictionary via image-attributes.
         /// </summary>
         [HtmlAttributeName("image-attributes", DictionaryAttributePrefix = "attr-")]
         public Dictionary<string, string> ImageAttributes { get; set; } = new Dictionary<string, string>();
-
-        /// <summary>
-        /// Optional query string parameters appended to every generated image URL (e.g. "bgcolor=fff").
-        /// </summary>
-        [HtmlAttributeName("query-string")]
-        public string QueryString { get; set; }
 
         #endregion
 
@@ -98,7 +105,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
                 if (Image is null)
                 {
                     output.SuppressOutput();
-                    logger.LogError("No image found for ds:picture tag helper. Model Alias: {ModelAlias}, Model Id: {ModelId}", model?.ContentType.Alias, model?.Id);
+                    logger.LogError("No image found for ds:img tag helper. Model Alias: {ModelAlias}, Model Id: {ModelId}", model?.ContentType.Alias, model?.Id);
                     return;
                 }
 
@@ -117,12 +124,18 @@ namespace DotSee.ResponsiveImages.TagHelpers
                     Error(output, Constants.PicElErrorRuleSetError, SuppressWarnings);
                 }
 
-                output.Content.AppendHtml(srcSet.CreatePictureElement(
+                HtmlString markup = srcSet.CreateMarkup(
                     Image, RuleSet,
-                    imageAlt: ImageAlt,
+                    alt: ImageAlt,
+                    title: ImageTitle,
+                    srcSetAttrName: string.IsNullOrWhiteSpace(SrcSetAttrName) ? "srcset" : SrcSetAttrName,
                     imageClass: ImageClass,
-                    imageAttributes: ImageAttributes.Count > 0 ? ImageAttributes : null,
-                    optionalQueryStringParameters: QueryString));
+                    otherAttributes: ImageAttributes.Count > 0 ? ImageAttributes : null);
+
+                if (markup != null)
+                {
+                    output.Content.AppendHtml(markup);
+                }
             }
             catch (Exception e)
             {

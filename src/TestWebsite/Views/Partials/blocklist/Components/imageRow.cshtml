@@ -39,3 +39,69 @@
             image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)">
 </ds:picture-csp>
 <!--DSpicture end-->
+
+<h1>ds:img test (new helper - single img with srcset/sizes)</h1>
+<!--ds:img start-->
+<ds:img image="@row.Image"
+        rule-set="defaultset"
+        image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)"
+        image-title="ds:img title test"
+        image-class="img-fluid"
+        attr-fetchpriority="low"
+        attr-id="ds-img-test"
+        attr-data-source="ds-img" />
+<!--ds:img end-->
+
+<h1>ds:background test (new helper - responsive CSS background)</h1>
+<!--ds:background start-->
+<ds:background image="@row.Image"
+               rule-set="defaultset"
+               element="section"
+               class="ds-bg-test"
+               style="min-height:400px">
+    <p>Content overlaid on the responsive background image.</p>
+</ds:background>
+<!--ds:background end-->
+
+<h1>ds:background test (with CSP nonce)</h1>
+<!--ds:background-csp start-->
+<ds:background image="@row.Image"
+               rule-set="defaultset"
+               element="div"
+               class="ds-bg-csp-test"
+               nonce="abscdrerejlkj"
+               style="min-height:400px">
+    <p>Background with a nonce-tagged style block.</p>
+</ds:background>
+<!--ds:background-csp end-->
+
+<h1>ds:picture test (new features: image-attributes + query-string)</h1>
+<!--ds:picture features start-->
+<ds:picture image="@row.Image"
+            suppress-warnings="false"
+            rule-set="defaultset"
+            wrapper-element="figure"
+            wrapper-class="img-fluid"
+            image-class="picture-img"
+            query-string="format=webp"
+            attr-fetchpriority="high"
+            attr-id="ds-picture-test"
+            attr-data-source="ds-picture"
+            image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)">
+</ds:picture>
+<!--ds:picture features end-->
+
+<h1>ds:picture-csp test (new features: image-attributes + query-string)</h1>
+<!--ds:picture-csp features start-->
+<ds:picture-csp image="@row.Image"
+            suppress-warnings="false"
+            rule-set="defaultset"
+            wrapper-class="img-fluid"
+            nonce="abscdrerejlkj"
+            query-string="format=webp"
+            attr-fetchpriority="high"
+            attr-id="ds-picture-csp-test"
+            attr-data-source="ds-picture-csp"
+            image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)">
+</ds:picture-csp>
+<!--ds:picture-csp features end-->

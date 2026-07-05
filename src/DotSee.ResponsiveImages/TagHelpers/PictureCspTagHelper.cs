@@ -85,6 +85,20 @@ namespace DotSee.ResponsiveImages.TagHelpers
         [HtmlAttributeName("suppress-warnings")]
         public bool SuppressWarnings { get; set; }
 
+        /// <summary>
+        /// Additional HTML attributes to render on the fallback img element.
+        /// Supply them individually with the attr- prefix (e.g. attr-fetchpriority="high", attr-id="hero")
+        /// or as a whole dictionary via image-attributes.
+        /// </summary>
+        [HtmlAttributeName("image-attributes", DictionaryAttributePrefix = "attr-")]
+        public Dictionary<string, string> ImageAttributes { get; set; } = new Dictionary<string, string>();
+
+        /// <summary>
+        /// Optional query string parameters appended to every generated image URL (e.g. "bgcolor=fff").
+        /// </summary>
+        [HtmlAttributeName("query-string")]
+        public string QueryString { get; set; }
+
         #endregion
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
@@ -123,9 +137,13 @@ namespace DotSee.ResponsiveImages.TagHelpers
 
                 // Generate a unique selector for CSP-safe style/script targeting
                 var uniqueId = "ds-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-                var imageAttributes = needsLqip
-                    ? new Dictionary<string, string> { { "data-ds-id", uniqueId } }
-                    : null;
+
+                // Merge any caller-supplied attributes with the internal data-ds-id used for LQIP targeting
+                var imageAttributes = new Dictionary<string, string>(ImageAttributes);
+                if (needsLqip)
+                {
+                    imageAttributes["data-ds-id"] = uniqueId;
+                }
 
                 // Emit the nonce-tagged <style> block before the picture element
                 if (needsLqip)
@@ -158,7 +176,8 @@ namespace DotSee.ResponsiveImages.TagHelpers
                     Image, RuleSet,
                     imageAlt: ImageAlt,
                     imageClass: ImageClass,
-                    imageAttributes: imageAttributes,
+                    imageAttributes: imageAttributes.Count > 0 ? imageAttributes : null,
+                    optionalQueryStringParameters: QueryString,
                     emitInlineLqip: false));
 
                 // Emit the nonce-tagged <script> block after the picture element

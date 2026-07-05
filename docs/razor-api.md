@@ -50,9 +50,11 @@ public HtmlString CreatePictureElement(
   <source media="only screen and (-webkit-min-device-pixel-ratio: 5/4) and (min-width: 1920px),..." srcset="/media/.../image.jpg?width=3840&quality=80" />
   <source media="only screen and (min-width: 1920px)" srcset="/media/.../image.jpg?width=1920&quality=80" />
   <!-- more sources for each breakpoint -->
-  <img class="hero-img" loading="lazy" decoding="async" src="/media/.../image.jpg" alt="Homepage hero" />
+  <img class="hero-img" loading="lazy" decoding="async" src="/media/.../image.jpg?width=1920&quality=80" alt="Homepage hero" />
 </picture>
 ```
+
+> **Note:** The fallback `<img>` `src` is generated with the rule set's `OriginalImageMaxWidth`/`OriginalImageMaxHeight`, `ImageQuality`, and `CropMode`, and includes any `optionalQueryStringParameters` (and `format=webp` when `useWebP` is enabled). It is not the raw original media URL.
 
 ### Caching
 

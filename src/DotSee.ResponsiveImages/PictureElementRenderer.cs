@@ -208,7 +208,7 @@ namespace DotSee.ResponsiveImages
                 SetLazyLoadAndCssClasses(sb, isLazyLoad, imageClass, emitInlineLqip);
 
                 sb.Append(" src=\"");
-                sb.Append(originalImage.Url());
+                sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode, furtherOptions: optionalQueryStringParameters));
 
                 sb.Append("\"");
                 if (imageAlt != null)
