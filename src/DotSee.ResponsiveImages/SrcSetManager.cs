@@ -53,10 +53,6 @@ namespace DotSee.ResponsiveImages
             _backgroundImageModelManager = backgroundImageModelManager;
             _pictureElementRenderer = pictureElementRenderer;
             _lazyLoadSettings = lazyLoadSettings;
-            //_smidgeHelper = smidgeHelper;
-            //_smidgeHelper.RequiresJs("/_content/Themelion.CoreViews/scripts/lazysizes.js");
-            //_smidgeHelper.RequiresJs("/_content/Themelion.CoreViews/scripts/ls.blur-up.min.js");
-
             _cacheService = cacheService;
             _configuration = configuration;
         }

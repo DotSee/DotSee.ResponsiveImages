@@ -1,0 +1,89 @@
+﻿[
+  {
+    "name": "defaultset",
+    "originalImageMaxWidth": "1920",
+    "imageQuality": "70",
+    "useBreakPointWidthIfNoWidth": false,
+    "lazyLoad": false,
+    "defaultImage": {
+      "width": "",
+      "height": "",
+      "blur": ""
+    },
+    "srcsetentries": [
+      {
+        "breakpoint": "1920"
+      },
+      {
+        "breakpoint": "1600"
+      },
+      {
+        "breakpoint": "1440"
+      },
+      {
+        "breakpoint": "1200"
+      },
+      {
+        "breakpoint": "992"
+      },
+      {
+        "breakpoint": "768"
+      },
+      {
+        "breakpoint": "576"
+      },
+      {
+        "breakpoint": "400"
+      },
+      {
+        "breakpoint": "320"
+      }
+    ],
+    "sizeentries": {
+      "defaultwidth": "1920",
+      "sizeentry": [
+        {
+          "mediacondition": "(max-width:1599px)",
+          "width": "1600",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:1439px)",
+          "width": "1440",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:1199px)",
+          "width": "1200",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:991px)",
+          "width": "992",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:767px)",
+          "width": "768",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:575px)",
+          "width": "576",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:399px)",
+          "width": "400",
+          "type": "px"
+        },
+        {
+          "mediacondition": "(max-width:319px)",
+          "width": "320",
+          "type": "px"
+        }
+      ]
+    }
+  }
+]
+

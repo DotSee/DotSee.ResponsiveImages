@@ -1,0 +1,41 @@
+﻿@inherits UmbracoViewPage<BlockListItem>
+@using DotSee.ResponsiveImages
+@using Umbraco.Cms.Core.Models.Blocks
+@using Clean.Core.Extensions
+@using DotSee.ResponsiveImages.TagHelpers
+@inject SrcSetManager _srcSetManager;
+@{
+    var row = Model.Content as ImageRow;
+    var settings = Model.Settings as ImageRowSettings;
+    if (settings?.Hide ?? false) { return; }
+
+    var spacingClasses = "";
+    if (Model.Settings is ISpacingProperties spacing)
+    {
+        spacingClasses = Clean.Core.Helpers.SpacingHelper.GetSpacingClasses(spacing.PaddingTop, spacing.PaddingBottom, spacing.PaddingLeft, spacing.PaddingRight, spacing.MarginTop, spacing.MarginBottom, spacing.MarginLeft, spacing.MarginRight);
+    }
+}
+<h1>Image original</h1>
+<div class="image @(spacingClasses)">
+    <img src="@row.Image.Url()" alt="@row.Image.Content.GetAltText()" class="img-fluid"> 
+    @if (!string.IsNullOrWhiteSpace(row.Caption))
+    {
+        <p class="caption">@row.Caption</p>
+    }
+</div> 
+
+<h1>Srcset test</h1>
+<!--Srcset manager start-->
+@_srcSetManager.CreateMarkup(row.Image, "defaultset") 
+<!--Srcset manager end-->
+ 
+<h1>Dspicture test</h1>
+<!--DSpicture start-->
+<ds:picture-csp image="@row.Image"
+            suppress-warnings="false"
+            rule-set="defaultset"
+            wrapper-class="img-fluid"
+            nonce = "abscdrerejlkj"
+            image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)">
+</ds:picture-csp>
+<!--DSpicture end-->
