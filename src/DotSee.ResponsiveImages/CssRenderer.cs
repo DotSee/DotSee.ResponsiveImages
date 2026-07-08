@@ -22,21 +22,24 @@ namespace DotSee.ResponsiveImages
             _publishedUrlProvider = publishedUrlProvider;
         }
 
-        public HtmlString RenderCss(ImageModel imageModel, IHtmlContent htmlContent = null)
+        /// <summary>
+        /// Renders the responsive background-image CSS as a nonce-less &lt;style&gt; block so the result
+        /// is cacheable. A per-request CSP nonce (if any) is injected by the caller after caching.
+        /// </summary>
+        public HtmlString RenderCss(ImageModel imageModel)
         {
-            var nonceAttribute = htmlContent is not null ? $" nonce='{htmlContent}'" : string.Empty;
             if (imageModel.IsSvg)
             {
                 StringBuilder sbSvg = new StringBuilder(string.Empty);
-                sbSvg.Append($"<style {nonceAttribute} type=\"text/css\">\r\n");
+                sbSvg.Append("<style type=\"text/css\">\r\n");
                 var aa = imageModel.OriginalImage.GetCropUrl(450, 450);
                 sbSvg.Append("\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('{aa}');\r\n }}");
                 sbSvg.Append("</style>");
                 return (new HtmlString(sbSvg.ToString()));
             }
-            
+
             StringBuilder sb = new StringBuilder(string.Empty);
-            sb.Append($"<style {nonceAttribute} type=\"text/css\">\r\n");
+            sb.Append("<style type=\"text/css\">\r\n");
 
             var imageQuery = ".media-image-{0}{1} {{background-image:url('{2}');}}\r\n";
 

@@ -142,13 +142,13 @@ namespace DotSee.ResponsiveImages.TagHelpers
                 var imageAttributes = new Dictionary<string, string>(ImageAttributes);
                 if (needsLqip)
                 {
-                    imageAttributes["data-ds-id"] = uniqueId;
+                    imageAttributes[SrcSetManager.DsIdAttributeName] = uniqueId;
                 }
 
                 // Emit the nonce-tagged <style> block before the picture element
                 if (needsLqip)
                 {
-                    var selector = $"[data-ds-id=\"{uniqueId}\"]";
+                    var selector = $"[{SrcSetManager.DsIdAttributeName}=\"{uniqueId}\"]";
 
                     if (lazyLoadSettings.PreviewType == PreviewType.Blur)
                     {
@@ -183,7 +183,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
                 // Emit the nonce-tagged <script> block after the picture element
                 if (needsLqip)
                 {
-                    var selector = $"[data-ds-id=\"{uniqueId}\"]";
+                    var selector = $"[{SrcSetManager.DsIdAttributeName}=\"{uniqueId}\"]";
 
                     if (lazyLoadSettings.PreviewType == PreviewType.Blur)
                     {

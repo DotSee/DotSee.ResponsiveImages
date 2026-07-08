@@ -60,7 +60,7 @@ public HtmlString CreatePictureElement(
 
 Results are cached for 20 minutes (sliding expiration). The cache key includes the image ID, rule set name, alt text, image class, extra attributes, and query string parameters -- so different combinations of these values are cached independently.
 
-Caching is disabled when `emitInlineLqip` is `false` (CSP mode), since each call generates a unique element identifier.
+In CSP mode (`emitInlineLqip` is `false`), the per-call `data-ds-id` is **not** part of the cache key: the markup is cached without it and the unique id is injected into the fallback `<img>` afterwards. Caching therefore stays effective under CSP.
 
 ---
 

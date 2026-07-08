@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DotSee.ResponsiveImages.LazyLoad;
 using Microsoft.AspNetCore.Html;
 using Xunit;
@@ -234,6 +235,49 @@ public class SrcSetManagerTests
         var css = h.SrcSetManager.GetBreakPointsCss(h.CreateImage(), "defaultset", null, new HtmlString("abc123"))!.ToString();
 
         Assert.Contains("nonce='abc123'", css);
+    }
+
+    [Fact]
+    public void GetBreakPointsCss_InjectsPerCallNonce_NotAStaleCachedOne()
+    {
+        var h = new RenderHarness();
+        var img = h.CreateImage();
+
+        var css1 = h.SrcSetManager.GetBreakPointsCss(img, "defaultset", null, new HtmlString("nonceA"))!.ToString();
+        var css2 = h.SrcSetManager.GetBreakPointsCss(img, "defaultset", null, new HtmlString("nonceB"))!.ToString();
+
+        Assert.Contains("nonce='nonceA'", css1);
+        Assert.Contains("nonce='nonceB'", css2);
+        // second call reuses the cached body but must NOT carry the first call's nonce
+        Assert.DoesNotContain("nonceA", css2);
+    }
+
+    [Fact]
+    public void GetBreakPointsCss_WithoutNonce_HasNoNonceAttribute()
+    {
+        var h = new RenderHarness();
+        var css = h.SrcSetManager.GetBreakPointsCss(h.CreateImage(), "defaultset")!.ToString();
+
+        Assert.DoesNotContain("nonce=", css);
+    }
+
+    [Fact]
+    public void CreatePictureElement_CspMode_InjectsPerCallDataDsId_NotAStaleCachedOne()
+    {
+        var h = new RenderHarness();
+        var img = h.CreateImage();
+
+        var p1 = h.SrcSetManager.CreatePictureElement(img, "defaultset", imageAlt: "a",
+            imageAttributes: new Dictionary<string, string> { [SrcSetManager.DsIdAttributeName] = "ds-111" },
+            emitInlineLqip: false)!.ToString();
+        var p2 = h.SrcSetManager.CreatePictureElement(img, "defaultset", imageAlt: "a",
+            imageAttributes: new Dictionary<string, string> { [SrcSetManager.DsIdAttributeName] = "ds-222" },
+            emitInlineLqip: false)!.ToString();
+
+        Assert.Contains("<img data-ds-id=\"ds-111\"", p1);
+        Assert.Contains("<img data-ds-id=\"ds-222\"", p2);
+        // second call reuses the cached body but must NOT carry the first call's id
+        Assert.DoesNotContain("ds-111", p2);
     }
 
     [Fact]

@@ -16,6 +16,12 @@ namespace DotSee.ResponsiveImages
 {
     public class SrcSetManager
     {
+        /// <summary>
+        /// Attribute used to link a CSP-safe &lt;picture&gt;'s fallback img to its nonce-tagged style/script.
+        /// It is unique per request, so it is stripped before caching and injected afterwards.
+        /// </summary>
+        public const string DsIdAttributeName = "data-ds-id";
+
         private readonly IRuleProvider _ruleProvider;
         private readonly IImageUrlGenerator _imageUrlGenerator;
         private readonly IPublishedUrlProvider _publishedUrlProvider;
@@ -69,13 +75,20 @@ namespace DotSee.ResponsiveImages
             //Exit early conditions
             if (originalImage == null) { return null; }
 
+            // Cache the nonce-less CSS (the nonce is per-request, so keying/caching by it would never hit
+            // and would leak an entry per request). The nonce is injected into the cached <style> below.
             var retVal = _cacheService.GetCachedItem(
-                Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString() + nonceAttribute)
+                Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString())
                 , () =>
                 {
                     ImageModel imageModel = _backgroundImageModelManager.GetImageModel(originalImage, ruleSetName, optionalQueryStringParameters);
-                    return _cssRenderer.RenderCss(imageModel, nonceAttribute);
+                    return _cssRenderer.RenderCss(imageModel);
                 }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
+
+            if (nonceAttribute != null)
+            {
+                return InjectAfterTag(retVal, "<style", $" nonce='{nonceAttribute}'");
+            }
 
             return (retVal);
         }
@@ -131,17 +144,29 @@ namespace DotSee.ResponsiveImages
 
             if (!emitInlineLqip)
             {
-                // CSP mode generates unique data-ds-id per call, so caching is not possible
-                return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
+                // CSP mode carries a unique per-call data-ds-id on the <img>. Cache the markup WITHOUT it
+                // (so entries are reusable) and inject the id afterwards, rather than skipping the cache.
+                string dsId = null;
+                var cspAttributes = imageAttributes;
+                if (imageAttributes != null && imageAttributes.TryGetValue(DsIdAttributeName, out dsId))
+                {
+                    cspAttributes = imageAttributes.Where(x => x.Key != DsIdAttributeName).ToDictionary(x => x.Key, x => x.Value);
+                }
+
+                var cspCached = _cacheService.GetCachedItem(
+                    BuildPictureCacheKey("pictureelement_csp", originalImage, ruleSetName, imageAlt, imageClass, cspAttributes, optionalQueryStringParameters)
+                    , () =>
+                    {
+                        return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, cspAttributes, optionalQueryStringParameters, emitInlineLqip);
+                    }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
+
+                return dsId != null
+                    ? InjectAfterTag(cspCached, "<img", $" {DsIdAttributeName}=\"{dsId}\"")
+                    : cspCached;
             }
 
-            var attrsKey = imageAttributes != null
-                ? string.Join("_", imageAttributes.OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value))
-                : string.Empty;
-            var cacheKey = $"pictureelement_{originalImage.Id}_{ruleSetName}_{imageAlt}_{imageClass}_{attrsKey}_{optionalQueryStringParameters}";
-
             return _cacheService.GetCachedItem(
-                cacheKey
+                BuildPictureCacheKey("pictureelement", originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters)
                 , () =>
                 {
                     return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
@@ -250,6 +275,27 @@ namespace DotSee.ResponsiveImages
         private SrcSetConfig GetConfigSection(MediaWithCrops originalImage, RuleSet ruleSet)
         {
             return GetConfig(originalImage, ruleSet);
+        }
+
+        private static string BuildPictureCacheKey(string prefix, MediaWithCrops originalImage, string ruleSetName, string imageAlt, string imageClass, Dictionary<string, string> imageAttributes, string optionalQueryStringParameters)
+        {
+            var attrsKey = imageAttributes != null
+                ? string.Join("_", imageAttributes.OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value))
+                : string.Empty;
+            return $"{prefix}_{originalImage.Id}_{ruleSetName}_{imageAlt}_{imageClass}_{attrsKey}_{optionalQueryStringParameters}";
+        }
+
+        /// <summary>
+        /// Inserts <paramref name="attribute"/> immediately after the first occurrence of <paramref name="tag"/>
+        /// (e.g. "&lt;style" or "&lt;img"). Used to add a per-request nonce or data-ds-id to cached markup.
+        /// </summary>
+        private static HtmlString InjectAfterTag(HtmlString html, string tag, string attribute)
+        {
+            if (html == null) { return null; }
+            var s = html.ToString();
+            int idx = s.IndexOf(tag, StringComparison.Ordinal);
+            if (idx < 0) { return html; }
+            return new HtmlString(s.Insert(idx + tag.Length, attribute));
         }
 
         private SrcSetConfig GetConfig(MediaWithCrops originalImage, RuleSet rs)
