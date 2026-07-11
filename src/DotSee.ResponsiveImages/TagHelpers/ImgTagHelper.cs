@@ -93,6 +93,14 @@ namespace DotSee.ResponsiveImages.TagHelpers
         [HtmlAttributeName("image-attributes", DictionaryAttributePrefix = "attr-")]
         public Dictionary<string, string> ImageAttributes { get; set; } = new Dictionary<string, string>();
 
+        /// <summary>
+        /// Optional CSP nonce. When provided, the LQIP preview is delivered via nonce-tagged &lt;style&gt;
+        /// and &lt;script&gt; blocks (CSP-safe) instead of inline style/onload attributes. When omitted,
+        /// the LQIP is applied inline.
+        /// </summary>
+        [HtmlAttributeName("nonce")]
+        public string Nonce { get; set; }
+
         #endregion
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
@@ -124,17 +132,34 @@ namespace DotSee.ResponsiveImages.TagHelpers
                     Error(output, Constants.PicElErrorRuleSetError, SuppressWarnings);
                 }
 
+                var useCsp = !string.IsNullOrWhiteSpace(Nonce);
+                var otherAttributes = ImageAttributes;
+
+                // CSP mode: resolve the nonce-tagged style/script blocks once and link them via data-ds-id.
+                var csp = useCsp ? srcSet.GetCspLqip(Image, RuleSet, Nonce) : CspLqip.Inactive;
+                if (csp.Active)
+                {
+                    otherAttributes = new Dictionary<string, string>(ImageAttributes) { [SrcSetManager.DsIdAttributeName] = csp.DsId };
+                    output.Content.AppendHtml(csp.StyleBlock);
+                }
+
                 HtmlString markup = srcSet.CreateMarkup(
                     Image, RuleSet,
                     alt: ImageAlt,
                     title: ImageTitle,
                     srcSetAttrName: string.IsNullOrWhiteSpace(SrcSetAttrName) ? "srcset" : SrcSetAttrName,
                     imageClass: ImageClass,
-                    otherAttributes: ImageAttributes.Count > 0 ? ImageAttributes : null);
+                    otherAttributes: otherAttributes.Count > 0 ? otherAttributes : null,
+                    emitInlineLqip: !useCsp);
 
                 if (markup != null)
                 {
                     output.Content.AppendHtml(markup);
+                }
+
+                if (csp.Active)
+                {
+                    output.Content.AppendHtml(csp.ScriptBlock);
                 }
             }
             catch (Exception e)

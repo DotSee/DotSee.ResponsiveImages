@@ -13,8 +13,10 @@ using Umbraco.Cms.Core.Models.PublishedContent;
 namespace DotSee.ResponsiveImages.TagHelpers
 {
     /// <summary>
-    /// Render any image through the Source Set Manager.
+    /// Renders a responsive &lt;picture&gt; element through the Source Set Manager.
     /// If no image is found, nothing will be rendered.
+    /// Supply an optional <c>nonce</c> to render CSP-safe (nonce-tagged style/script blocks instead of
+    /// inline style/onload for the LQIP preview); when omitted the LQIP is applied inline.
     /// </summary>
     /// <param name="srcSet"></param>
     /// <param name="logger"></param>
@@ -86,6 +88,14 @@ namespace DotSee.ResponsiveImages.TagHelpers
         [HtmlAttributeName("query-string")]
         public string QueryString { get; set; }
 
+        /// <summary>
+        /// Optional CSP nonce. When provided, the LQIP preview is delivered via nonce-tagged &lt;style&gt;
+        /// and &lt;script&gt; blocks (CSP-safe) instead of inline style/onload attributes. When omitted,
+        /// the LQIP is applied inline.
+        /// </summary>
+        [HtmlAttributeName("nonce")]
+        public string Nonce { get; set; }
+
         #endregion
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
@@ -117,12 +127,29 @@ namespace DotSee.ResponsiveImages.TagHelpers
                     Error(output, Constants.PicElErrorRuleSetError, SuppressWarnings);
                 }
 
+                var useCsp = !string.IsNullOrWhiteSpace(Nonce);
+                var imageAttributes = ImageAttributes;
+
+                // CSP mode: resolve the nonce-tagged style/script blocks once and link them via data-ds-id.
+                var csp = useCsp ? srcSet.GetCspLqip(Image, RuleSet, Nonce) : CspLqip.Inactive;
+                if (csp.Active)
+                {
+                    imageAttributes = new Dictionary<string, string>(ImageAttributes) { [SrcSetManager.DsIdAttributeName] = csp.DsId };
+                    output.Content.AppendHtml(csp.StyleBlock);
+                }
+
                 output.Content.AppendHtml(srcSet.CreatePictureElement(
                     Image, RuleSet,
                     imageAlt: ImageAlt,
                     imageClass: ImageClass,
-                    imageAttributes: ImageAttributes.Count > 0 ? ImageAttributes : null,
-                    optionalQueryStringParameters: QueryString));
+                    imageAttributes: imageAttributes.Count > 0 ? imageAttributes : null,
+                    optionalQueryStringParameters: QueryString,
+                    emitInlineLqip: !useCsp));
+
+                if (csp.Active)
+                {
+                    output.Content.AppendHtml(csp.ScriptBlock);
+                }
             }
             catch (Exception e)
             {

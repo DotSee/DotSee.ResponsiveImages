@@ -22,6 +22,9 @@ Renders a `<picture>` element with responsive `<source>` tags for each breakpoin
 | `wrapper-element` | string | No | HTML element to wrap the `<picture>` in (e.g., `div`, `figure`). |
 | `wrapper-class` | string | No | CSS class applied to the wrapper element. |
 | `image-class` | string | No | CSS class applied to the `<img>` inside the picture element. |
+| `image-attributes` / `attr-*` | dictionary | No | Extra attributes for the `<img>`. Supply individually as `attr-fetchpriority="high"`, `attr-id="hero"`, etc. |
+| `query-string` | string | No | Extra query string parameters appended to every generated image URL (e.g. `format=webp`). |
+| `nonce` | string | No | CSP nonce. When set, the LQIP preview is rendered as nonce-tagged `<style>`/`<script>` blocks instead of inline `style`/`onload` (CSP-safe). See [CSP](#content-security-policy-csp). |
 | `suppress-warnings` | bool | No | Set to `true` to hide validation error messages from the rendered output. Defaults to `false`. |
 
 ### Basic Usage
@@ -109,31 +112,19 @@ By default, the tag helper renders visible error messages when required attribut
 - The `image` attribute must receive a `MediaWithCrops` object, **not** a URL string. Use `@Model.Image` (the property value), not `@Model.Image.Url()`.
 - The tag helper renders nothing if the image is null, which is safe for optional image properties.
 - SVG images are handled separately and rendered as a plain `<img>` tag (no `<picture>` element).
-- When lazy loading with LQIP is enabled, `<ds:picture>` uses inline `style` and `onload` attributes. If your site uses a Content Security Policy, use `<ds:picture-csp>` instead (see below).
+- When lazy loading with LQIP is enabled, `<ds:picture>` uses inline `style` and `onload` attributes **unless** you supply a `nonce` — see [CSP](#content-security-policy-csp).
 
 ---
 
-## ds:picture-csp
+## Content Security Policy (CSP)
 
-A CSP-safe version of `<ds:picture>`. Instead of inline `style` and `onload` attributes for LQIP previews, it emits nonce-tagged `<style>` and `<script>` blocks that comply with strict Content Security Policies.
-
-When lazy loading is disabled or no LQIP preview type is configured, `<ds:picture-csp>` behaves identically to `<ds:picture>`.
-
-### Attributes
-
-All attributes from `<ds:picture>` are supported, plus:
-
-| Attribute | Type | Required | Description |
-|---|---|---|---|
-| `nonce` | string | Yes | The CSP nonce value for inline `<style>` and `<script>` blocks. |
-
-### Basic Usage
+By default the LQIP preview is applied with inline `style` and `onload` attributes, which a strict Content Security Policy (no `'unsafe-inline'`) will block. Supply a **`nonce`** attribute and `<ds:picture>` instead emits nonce-tagged `<style>` and `<script>` blocks linked to the image via a generated `data-ds-id`:
 
 ```cshtml
-<ds:picture-csp image="@Model.Image"
-                rule-set="default"
-                image-alt="A descriptive alt text"
-                nonce="@ViewData["CspNonce"]" />
+<ds:picture image="@Model.Image"
+            rule-set="default"
+            image-alt="A descriptive alt text"
+            nonce="@ViewData["CspNonce"]" />
 ```
 
 ### Rendered Output (with Blur preview)
@@ -152,32 +143,12 @@ All attributes from `<ds:picture>` are supported, plus:
 </script>
 ```
 
-### CSP Policy Requirements
-
-With `<ds:picture-csp>`, your Content Security Policy only needs to allow nonce-based inline styles and scripts:
+With a nonce, your policy only needs to allow nonce-based inline styles and scripts — no `'unsafe-inline'`:
 
 ```
 Content-Security-Policy: style-src 'nonce-abc123'; script-src 'nonce-abc123';
 ```
 
-No `'unsafe-inline'` is required.
+When lazy loading is disabled or no LQIP preview type is configured, the `nonce` has no effect (there is nothing inline to protect). The `<ds:img>` tag helper supports the same `nonce` attribute for the single-`<img>` variant.
 
-### With Wrapper Element
-
-```cshtml
-<ds:picture-csp image="@Model.Image"
-                rule-set="hero"
-                image-alt="Hero banner"
-                nonce="@ViewData["CspNonce"]"
-                wrapper-element="figure"
-                wrapper-class="hero-image" />
-```
-
-### When to Use Which
-
-| Tag Helper | Use When |
-|---|---|
-| `<ds:picture>` | No CSP, or CSP allows `'unsafe-inline'` for styles and scripts. Simpler output, slightly smaller HTML. |
-| `<ds:picture-csp>` | Strict CSP that requires nonces for inline styles and scripts. |
-
-Both tag helpers produce identical `<picture>` and `<source>` markup. The only difference is how LQIP previews are applied when lazy loading is enabled.
+> **Deprecated:** `<ds:picture-csp>` is now an obsolete alias of `<ds:picture>` and behaves identically to `<ds:picture nonce="…">`. Prefer `<ds:picture>` with a `nonce`; the `-csp` element will be removed in a future version.

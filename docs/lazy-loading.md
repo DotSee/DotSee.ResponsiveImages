@@ -165,16 +165,23 @@ Both `CreatePictureElement` (and the `<ds:picture>` tag helper) and `CreateMarku
 
 ## Content Security Policy (CSP)
 
-The default `<ds:picture>` tag helper and `CreateMarkup`/`CreatePictureElement` methods use inline `style` and `onload` attributes for LQIP previews. A strict CSP that forbids `'unsafe-inline'` will block these.
+By default the `<ds:picture>` / `<ds:img>` tag helpers and the `CreateMarkup`/`CreatePictureElement` methods use inline `style` and `onload` attributes for LQIP previews. A strict CSP that forbids `'unsafe-inline'` will block these.
 
-Use the `<ds:picture-csp>` tag helper instead. It replaces inline attributes with nonce-tagged `<style>` and `<script>` blocks:
+Supply a **`nonce`** attribute and the tag helper replaces the inline attributes with nonce-tagged `<style>` and `<script>` blocks:
 
 ```cshtml
-<ds:picture-csp image="@Model.Image"
-                rule-set="default"
-                image-alt="My image"
-                nonce="@ViewData["CspNonce"]" />
+<ds:picture image="@Model.Image"
+            rule-set="default"
+            image-alt="My image"
+            nonce="@ViewData["CspNonce"]" />
+
+<ds:img image="@Model.Image"
+        rule-set="default"
+        image-alt="My image"
+        nonce="@ViewData["CspNonce"]" />
 ```
+
+> `<ds:picture-csp>` still works as an obsolete alias of `<ds:picture nonce="…">`, but is deprecated — prefer the `nonce` attribute.
 
 For the Razor API (`SrcSetManager`), you can disable inline LQIP and handle it yourself:
 
@@ -188,7 +195,7 @@ For the Razor API (`SrcSetManager`), you can disable inline LQIP and handle it y
 
 Then add your own nonce-tagged blocks targeting the `[data-ds-id="my-img"]` selector.
 
-See [Tag Helpers - ds:picture-csp](tag-helpers.md#dspicture-csp) for full details.
+See [Tag Helpers - Content Security Policy](tag-helpers.md#content-security-policy-csp) for full details.
 
 ## Browser Support
 

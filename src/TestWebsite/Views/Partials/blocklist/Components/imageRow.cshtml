@@ -52,6 +52,27 @@
         attr-data-source="ds-img" />
 <!--ds:img end-->
 
+<h1>ds:picture UNIFIED CSP test (ds:picture with nonce)</h1>
+<!--ds:picture unified csp start-->
+<ds:picture image="@row.Image"
+            rule-set="defaultset"
+            image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)"
+            nonce="unifiednonce123"
+            attr-id="ds-picture-unified-csp"
+            attr-data-source="ds-picture-unified-csp" />
+<!--ds:picture unified csp end-->
+
+<h1>ds:img CSP test (ds:img with nonce)</h1>
+<!--ds:img csp start-->
+<ds:img image="@row.Image"
+        rule-set="defaultset"
+        image-alt="@(row.Image.Content.GetAltText() ?? string.Empty)"
+        image-class="img-fluid"
+        nonce="imgnonce123"
+        attr-id="ds-img-csp"
+        attr-data-source="ds-img-csp" />
+<!--ds:img csp end-->
+
 <h1>ds:background test (new helper - responsive CSS background)</h1>
 <!--ds:background start-->
 <ds:background image="@row.Image"

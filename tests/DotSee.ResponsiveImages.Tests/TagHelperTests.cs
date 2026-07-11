@@ -232,15 +232,13 @@ public class TagHelperTests
         Assert.True(string.IsNullOrEmpty(Render(th, "ds:background")));
     }
 
-    // ---- ds:picture-csp ----
+    // ---- ds:picture with nonce (unified CSP mode) ----
 
     [Fact]
-    public void DsPictureCsp_EmitsNonceStyleAndScriptBlocks()
+    public void DsPicture_WithNonce_EmitsCspStyleScriptAndDataDsId_NoInlineStyle()
     {
         var h = new RenderHarness();
-        var th = new PictureCspTagHelper(
-            h.SrcSetManager, h.Lazy, h.ConfigSource, h.ImageUrlGenerator, h.UrlProvider,
-            NullLogger<PictureCspTagHelper>.Instance)
+        var th = new PictureElementTagHelper(h.SrcSetManager, NullLogger<PictureElementTagHelper>.Instance)
         {
             Image = h.CreateImage(),
             RuleSet = "defaultset",
@@ -248,21 +246,84 @@ public class TagHelperTests
             Nonce = "n1"
         };
 
-        var html = Render(th, "ds:picture-csp");
+        var html = Render(th, "ds:picture");
 
         Assert.Contains("<picture", html);
         Assert.Contains("<style nonce=\"n1\"", html);
         Assert.Contains("data-ds-id=\"ds-", html);
         Assert.Contains("<script nonce=\"n1\"", html);
+        Assert.DoesNotContain("onload=", html); // no inline handler in CSP mode
     }
 
     [Fact]
-    public void DsPictureCsp_PassesThroughExtraAttributesAlongsideDataDsId()
+    public void DsPicture_WithoutNonce_UsesInlineLqip_NoNonceBlocks()
     {
         var h = new RenderHarness();
-        var th = new PictureCspTagHelper(
-            h.SrcSetManager, h.Lazy, h.ConfigSource, h.ImageUrlGenerator, h.UrlProvider,
-            NullLogger<PictureCspTagHelper>.Instance)
+        var th = new PictureElementTagHelper(h.SrcSetManager, NullLogger<PictureElementTagHelper>.Instance)
+        {
+            Image = h.CreateImage(),
+            RuleSet = "defaultset",
+            ImageAlt = "a"
+        };
+
+        var html = Render(th, "ds:picture");
+
+        Assert.Contains("<picture", html);
+        Assert.DoesNotContain("<style", html);
+        Assert.DoesNotContain("<script", html);
+        Assert.Contains("onload=", html); // inline LQIP handler present
+    }
+
+    // ---- ds:img with nonce (CSP mode) ----
+
+    [Fact]
+    public void DsImg_WithNonce_EmitsCspStyleScriptAndDataDsId_NoInlineStyle()
+    {
+        var h = new RenderHarness();
+        var th = new ImgTagHelper(h.SrcSetManager, NullLogger<ImgTagHelper>.Instance)
+        {
+            Image = h.CreateImage(),
+            RuleSet = "defaultset",
+            ImageAlt = "a",
+            Nonce = "n1"
+        };
+
+        var html = Render(th, "ds:img");
+
+        Assert.Contains("<img", html);
+        Assert.DoesNotContain("<picture", html);
+        Assert.Contains("<style nonce=\"n1\"", html);
+        Assert.Contains("data-ds-id=\"ds-", html);
+        Assert.Contains("<script nonce=\"n1\"", html);
+        Assert.DoesNotContain("onload=", html);
+    }
+
+    [Fact]
+    public void DsImg_WithoutNonce_UsesInlineLqip()
+    {
+        var h = new RenderHarness();
+        var th = new ImgTagHelper(h.SrcSetManager, NullLogger<ImgTagHelper>.Instance)
+        {
+            Image = h.CreateImage(),
+            RuleSet = "defaultset",
+            ImageAlt = "a"
+        };
+
+        var html = Render(th, "ds:img");
+
+        Assert.DoesNotContain("<style", html);
+        Assert.Contains("onload=", html);
+    }
+
+    // ---- ds:picture-csp (obsolete alias) still works ----
+
+    [Fact]
+    public void DsPictureCsp_ObsoleteAlias_StillRendersCspBlocks()
+    {
+        var h = new RenderHarness();
+#pragma warning disable CS0618 // testing the obsolete backwards-compatible alias
+        var th = new PictureCspTagHelper(h.SrcSetManager, NullLogger<PictureElementTagHelper>.Instance)
+#pragma warning restore CS0618
         {
             Image = h.CreateImage(),
             RuleSet = "defaultset",
@@ -273,7 +334,10 @@ public class TagHelperTests
 
         var html = Render(th, "ds:picture-csp");
 
-        Assert.Contains("data-x=\"y\"", html);
+        Assert.Contains("<picture", html);
+        Assert.Contains("<style nonce=\"n1\"", html);
         Assert.Contains("data-ds-id=\"ds-", html);
+        Assert.Contains("<script nonce=\"n1\"", html);
+        Assert.Contains("data-x=\"y\"", html);
     }
 }

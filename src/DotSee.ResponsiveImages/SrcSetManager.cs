@@ -180,7 +180,8 @@ namespace DotSee.ResponsiveImages
             , string title = ""
             , string srcSetAttrName = "srcset"
             , string imageClass = ""
-            , Dictionary<string, string> otherAttributes = null)
+            , Dictionary<string, string> otherAttributes = null
+            , bool emitInlineLqip = true)
         {
             var ruleSet = _cacheService.GetCachedItem(
                 Helpers.GetRulesetCacheKey(ruleSetName),
@@ -215,7 +216,8 @@ namespace DotSee.ResponsiveImages
             sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode));
             sb.Append("\"");
 
-            if (_overriddenLazyLoad)
+            // Inline LQIP (style/onload). Skipped in CSP mode, where the caller emits nonce-tagged blocks instead.
+            if (_overriddenLazyLoad && emitInlineLqip)
             {
                 if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
                 {
@@ -234,7 +236,7 @@ namespace DotSee.ResponsiveImages
             sb.Append(Helpers.CreateAttribute("title", title));
             if (otherAttributes != null)
             {
-                sb.Append(string.Join(",", otherAttributes.Select(x => Helpers.CreateAttribute(x.Key, x.Value).IfNull(x => ""))));
+                sb.Append(string.Join(" ", otherAttributes.Select(x => Helpers.CreateAttribute(x.Key, x.Value).IfNull(x => ""))));
             }
             sb.Append("/>");
             return new HtmlString(sb.ToString());
@@ -266,6 +268,45 @@ namespace DotSee.ResponsiveImages
                 return string.Concat("media-image-", styleGuid);
             }
             return null;
+        }
+
+        /// <summary>
+        /// Builds the CSP-safe LQIP artifacts (nonce-tagged &lt;style&gt;/&lt;script&gt; blocks + a unique
+        /// data-ds-id) for an image, so a strict Content Security Policy is satisfied without inline
+        /// style/onload attributes. Returns <see cref="CspLqip.Inactive"/> when there is nothing to emit
+        /// (no nonce, lazy loading disabled for the rule set, or no preview type configured). Callers add
+        /// <see cref="CspLqip.DsId"/> to the image element (via <see cref="DsIdAttributeName"/>) and render
+        /// the element with <c>emitInlineLqip: false</c>.
+        /// </summary>
+        public CspLqip GetCspLqip(MediaWithCrops originalImage, string ruleSetName, string nonce)
+        {
+            if (originalImage == null || string.IsNullOrWhiteSpace(nonce)) { return CspLqip.Inactive; }
+
+            var ruleSet = _cacheService.GetCachedItem(
+                Helpers.GetRulesetCacheKey(ruleSetName),
+                () => _ruleProvider.LoadRule(ruleSetName));
+
+            if (ruleSet == null || !_lazyLoadSettings.IsLazyLoadEnabled(ruleSet)) { return CspLqip.Inactive; }
+
+            var uniqueId = "ds-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            var selector = $"[{DsIdAttributeName}=\"{uniqueId}\"]";
+
+            if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
+            {
+                var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode);
+                var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s}}</style>";
+                var script = $"<script nonce=\"{nonce}\">document.querySelector('{selector}').addEventListener('load',function(){{this.style.filter='none';this.style.backgroundImage='none'}});</script>";
+                return new CspLqip(uniqueId, new HtmlString(style), new HtmlString(script));
+            }
+
+            if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
+            {
+                var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')}}</style>";
+                var script = $"<script nonce=\"{nonce}\">document.querySelector('{selector}').addEventListener('load',function(){{this.style.backgroundImage='none'}});</script>";
+                return new CspLqip(uniqueId, new HtmlString(style), new HtmlString(script));
+            }
+
+            return CspLqip.Inactive;
         }
 
         #endregion Public Members
