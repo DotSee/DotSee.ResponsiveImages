@@ -46,7 +46,8 @@ public sealed class RenderHarness
         bool? enableLazyLoad = true,
         PreviewType previewType = PreviewType.LowResImage,
         string lowResPath = "/img/lowres.jpg",
-        RuleSet? ruleSet = null)
+        RuleSet? ruleSet = null,
+        ILqipService? lqipService = null)
     {
         ImageUrl = imageUrl;
         RuleSet = ruleSet ?? DefaultRuleSet();
@@ -97,7 +98,7 @@ public sealed class RenderHarness
         };
         var cache = new CacheService(new MemoryCache(new MemoryCacheOptions()));
         var pictureRenderer = new PictureElementRenderer(
-            imageUrlService, ruleProvider, imageUrlGenerator.Object, urlProvider.Object, Lazy, cache);
+            imageUrlService, ruleProvider, imageUrlGenerator.Object, urlProvider.Object, Lazy, cache, lqipService);
         var bgManager = new BackgroundImageModelManager(ruleProvider, Lazy, imageUrlService, cache);
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["useWebP"] = useWebP ? "true" : "false" })
@@ -105,7 +106,7 @@ public sealed class RenderHarness
 
         SrcSetManager = new SrcSetManager(
             ruleProvider, imageUrlGenerator.Object, urlProvider.Object, imageUrlService,
-            cssRenderer, pictureRenderer, bgManager, Lazy, cache, config);
+            cssRenderer, pictureRenderer, bgManager, Lazy, cache, config, lqipService);
     }
 
     private static string BuildUrl(ImageUrlGenerationOptions o)
@@ -114,6 +115,8 @@ public sealed class RenderHarness
         if (o.Width.HasValue) qs.Add($"width={o.Width}");
         if (o.Height.HasValue) qs.Add($"height={o.Height}");
         if (o.Quality.HasValue) qs.Add($"quality={o.Quality}");
+        // Echoed so tests can assert the crop is anchored on the editor's focal point.
+        if (o.FocalPoint is not null) qs.Add($"rxy={o.FocalPoint.Left},{o.FocalPoint.Top}");
         if (!string.IsNullOrEmpty(o.FurtherOptions))
         {
             qs.Add(o.FurtherOptions.TrimStart('&', '?'));
@@ -141,12 +144,17 @@ public sealed class RenderHarness
         return rs;
     }
 
-    public MediaWithCrops CreateImage(Guid? key = null, int id = 1234, decimal? focalLeft = null, decimal? focalTop = null)
+    public MediaWithCrops CreateImage(Guid? key = null, int id = 1234, decimal? focalLeft = null, decimal? focalTop = null,
+        int? intrinsicWidth = null, int? intrinsicHeight = null)
     {
         var content = new Mock<IPublishedContent>();
         content.SetupGet(x => x.Key).Returns(key ?? Guid.Parse("11111111-1111-1111-1111-111111111111"));
         content.SetupGet(x => x.Id).Returns(id);
         content.SetupGet(x => x.Name).Returns(ImageUrl); // URL providers echo this back (see harness ctor)
+
+        // umbracoWidth/umbracoHeight are how the renderer derives the aspect ratio for width/height attributes.
+        SetupIntProperty(content, "umbracoWidth", intrinsicWidth);
+        SetupIntProperty(content, "umbracoHeight", intrinsicHeight);
         // .Url() switches on ContentType.ItemType; Content routes to GetUrl (stubbed). Both GetUrl and
         // GetMediaUrl return the same test URL, so this only affects which stubbed method is called.
         content.SetupGet(x => x.ItemType).Returns(PublishedItemType.Content);
@@ -165,8 +173,42 @@ public sealed class RenderHarness
             };
         }
 
+        // GetCropUrl reads the cropper value off the umbracoFile property; without it Umbraco returns
+        // an empty URL before ever reaching the IImageUrlGenerator stub.
+        var fileProperty = new Mock<IPublishedProperty>();
+        fileProperty.SetupGet(x => x.Alias).Returns("umbracoFile");
+        fileProperty.Setup(x => x.HasValue(It.IsAny<string?>(), It.IsAny<string?>())).Returns(true);
+        fileProperty.Setup(x => x.GetValue(It.IsAny<string?>(), It.IsAny<string?>())).Returns(crops);
+        content.Setup(x => x.GetProperty("umbracoFile")).Returns(fileProperty.Object);
+        content.SetupGet(x => x.Properties).Returns(new[] { fileProperty.Object });
+
         return new MediaWithCrops(content.Object, Fallback, crops);
     }
+
+    private static void SetupIntProperty(Mock<IPublishedContent> content, string alias, int? value)
+    {
+        if (value is null)
+        {
+            content.Setup(x => x.GetProperty(alias)).Returns((IPublishedProperty?)null);
+            return;
+        }
+
+        var property = new Mock<IPublishedProperty>();
+        property.Setup(x => x.GetValue(It.IsAny<string?>(), It.IsAny<string?>())).Returns(value.Value);
+        content.Setup(x => x.GetProperty(alias)).Returns(property.Object);
+    }
+}
+
+/// <summary>
+/// Stands in for the ImageSharp-backed placeholder builder, which needs a real media file on disk.
+/// </summary>
+public sealed class FakeLqipService : ILqipService
+{
+    private readonly string? _dataUri;
+
+    public FakeLqipService(string? dataUri) => _dataUri = dataUri;
+
+    public string? GetDataUri(MediaWithCrops image) => _dataUri;
 }
 
 /// <summary>

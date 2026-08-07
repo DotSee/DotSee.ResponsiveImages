@@ -42,6 +42,9 @@
   <ItemGroup>
     <PackageReference Include="Umbraco.Cms.Core" Version="17.1.0" />
     <PackageReference Include="Umbraco.Cms.Web.Common" Version="17.1.0" />
+    <!-- Used only to decode/downscale media into inline base64 LQIP placeholders.
+         Same version Umbraco.Cms.Imaging.ImageSharp 17.1.0 resolves, so no extra download for consumers. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
   <!-- Themelion.Core project reference removed - dependencies being inlined -->
 

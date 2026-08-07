@@ -11,6 +11,8 @@ When lazy loading is enabled:
 3. If a preview type is configured, a low-quality placeholder is shown as a CSS `background-image` while the real image loads
 4. On load, the placeholder is removed via an inline `onload` handler
 
+Images marked `above-fold` opt out of all of this and load eagerly at high priority — see [Best Practices](#best-practices).
+
 All `<source>` elements inside `<picture>` use real `srcset` attributes (not `data-srcset`), so browsers that don't support lazy loading simply load all images normally.
 
 ## Configuration
@@ -71,7 +73,7 @@ Set `LazyLoad` to `null` (or omit it) to inherit the global setting.
 }
 ```
 
-Generates a tiny (40px wide, quality 20) version of the actual image and displays it as a blurred CSS background while the full image loads.
+Generates a tiny (20px wide) WebP version of the actual image, inlines it as a base64 `data:` URI, and displays it as a blurred CSS background while the full image loads.
 
 **Rendered HTML:**
 
@@ -79,19 +81,20 @@ Generates a tiny (40px wide, quality 20) version of the actual image and display
 <img src="/media/.../image.jpg"
      loading="lazy"
      decoding="async"
-     style="background-size:cover;background-repeat:no-repeat;background-image:url('/media/.../image.jpg?width=40&quality=20');filter:blur(20px);transition:filter 0.3s"
+     width="1920" height="1080"
+     style="background-size:cover;background-repeat:no-repeat;background-image:url('data:image/webp;base64,UklGRi4AAABXRUJQ…');filter:blur(20px);transition:filter 0.3s"
      onload="this.style.filter='none';this.style.backgroundImage='none'"
      alt="..." />
 ```
 
 **How it looks:**
-1. A heavily blurred version of the image appears immediately
+1. A heavily blurred version of the image appears immediately, with the HTML — there is nothing to fetch first
 2. The full image loads in the background
 3. On load, the blur filter and background are removed with a 0.3s CSS transition
 
-**Pros:** Each placeholder matches the actual image content. No additional assets to manage.
+**Pros:** Each placeholder matches the actual image content, costs no HTTP request, and paints as soon as the HTML does. No additional assets to manage, and one less image variant for a per-transformation-billed CDN to generate.
 
-**Cons:** Adds a small extra image request per image (though at ~40px and quality 20, these are typically under 1KB).
+**Cons:** A few hundred bytes of markup per image. The placeholder is built by decoding the source media with ImageSharp on first use and is cached; if the media file cannot be read or decoded the package falls back to the previous behaviour — a `?width=40&quality=20` URL placeholder, which does cost a request.
 
 ### LowResImage
 
@@ -155,7 +158,13 @@ Both `CreatePictureElement` (and the `<ds:picture>` tag helper) and `CreateMarku
 
 ## Best Practices
 
-- **Don't lazy-load above-the-fold images.** Set `LazyLoad: false` on rule sets used for hero images or any content visible without scrolling. Lazy loading above-the-fold images delays their rendering and hurts LCP (Largest Contentful Paint).
+- **Don't lazy-load above-the-fold images.** Lazy-loading the largest visible image delays the very paint LCP (Largest Contentful Paint) measures. Prefer the per-usage `above-fold` attribute, which also sets `fetchpriority="high"` and skips the placeholder:
+
+  ```cshtml
+  <ds:picture image="@Model.HeroImage" rule-set="hero" image-alt="Hero" above-fold="true" />
+  ```
+
+  Use `LazyLoad: false` on the rule set instead when *every* image using it is above the fold.
 
 - **Use Blur for content-heavy pages.** The blur preview gives users a visual hint of what's loading, which feels faster than a generic placeholder.
 

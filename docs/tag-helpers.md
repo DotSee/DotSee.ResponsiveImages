@@ -10,7 +10,7 @@ Register the tag helpers in your `_ViewImports.cshtml`:
 
 ## ds:picture
 
-Renders a `<picture>` element with responsive `<source>` tags for each breakpoint, including 2x/3x variants when configured.
+Renders a `<picture>` element with one responsive `<source>` per breakpoint. When `Use2x`/`Use3x` are configured, the higher-DPI images are extra `2x`/`3x` candidates on that same `<source>` — the browser matches them against the device pixel ratio itself, so no DPI media queries are needed.
 
 ### Attributes
 
@@ -25,7 +25,27 @@ Renders a `<picture>` element with responsive `<source>` tags for each breakpoin
 | `image-attributes` / `attr-*` | dictionary | No | Extra attributes for the `<img>`. Supply individually as `attr-fetchpriority="high"`, `attr-id="hero"`, etc. |
 | `query-string` | string | No | Extra query string parameters appended to every generated image URL (e.g. `format=webp`). |
 | `nonce` | string | No | CSP nonce. When set, the LQIP preview is rendered as nonce-tagged `<style>`/`<script>` blocks instead of inline `style`/`onload` (CSP-safe). See [CSP](#content-security-policy-csp). |
+| `above-fold` | bool | No | Marks an image that is visible without scrolling. See [Above-the-fold images](#above-the-fold-images). |
 | `suppress-warnings` | bool | No | Set to `true` to hide validation error messages from the rendered output. Defaults to `false`. |
+
+Both `<ds:picture>` and `<ds:img>` accept `above-fold`, `nonce` and `attr-*`.
+
+### Above-the-fold images
+
+Set `above-fold="true"` on the hero — usually the page's Largest Contentful Paint element. The image is then loaded eagerly at high priority and skips the placeholder, instead of being deferred like images further down the page:
+
+```cshtml
+<ds:picture image="@Model.HeroImage"
+            rule-set="hero"
+            image-alt="Hero banner"
+            above-fold="true" />
+```
+
+```html
+<img loading="eager" fetchpriority="high" src="..." width="1920" height="1080" alt="Hero banner" />
+```
+
+This is per usage rather than per rule set, so the same rule set can serve a lazy gallery image and an eager hero. An explicit `attr-fetchpriority` always wins over the automatic `high`.
 
 ### Basic Usage
 
@@ -112,6 +132,8 @@ By default, the tag helper renders visible error messages when required attribut
 - The `image` attribute must receive a `MediaWithCrops` object, **not** a URL string. Use `@Model.Image` (the property value), not `@Model.Image.Url()`.
 - The tag helper renders nothing if the image is null, which is safe for optional image properties.
 - SVG images are handled separately and rendered as a plain `<img>` tag (no `<picture>` element).
+- `width` and `height` attributes are emitted automatically so the browser can reserve the box before the image arrives (no layout shift). They are derived from the rule set's max dimensions, falling back to the media item's own `umbracoWidth`/`umbracoHeight` to work out the missing side. Supplying `attr-width`/`attr-height` yourself disables this.
+- Crops honour the focal point the editor set in the backoffice unless the rule set sets `UseFocalPoint: false`.
 - When lazy loading with LQIP is enabled, `<ds:picture>` uses inline `style` and `onload` attributes **unless** you supply a `nonce` — see [CSP](#content-security-policy-csp).
 
 ---

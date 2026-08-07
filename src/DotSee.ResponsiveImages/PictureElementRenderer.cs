@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,6 +21,7 @@ namespace DotSee.ResponsiveImages
         private readonly IImageUrlGenerator _imageUrlGenerator;
         private readonly IPublishedUrlProvider _publishedUrlProvider;
         private readonly ICacheService _cacheService;
+        private readonly ILqipService _lqipService;
 
         public PictureElementRenderer(
             ImageUrlService imageUrlService
@@ -28,7 +29,8 @@ namespace DotSee.ResponsiveImages
             , IImageUrlGenerator imageUrlGenerator
             , IPublishedUrlProvider publishedUrlProvider
             , IGlobalLazyLoadSettings lazyLoadSettings
-            , ICacheService cacheService)
+            , ICacheService cacheService
+            , ILqipService lqipService = null)
         {
             _imageUrlService = imageUrlService;
             _ruleProvider = ruleProvider;
@@ -36,23 +38,22 @@ namespace DotSee.ResponsiveImages
             _imageUrlGenerator = imageUrlGenerator;
             _publishedUrlProvider = publishedUrlProvider;
             _cacheService = cacheService;
+            _lqipService = lqipService;
         }
 
-        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true)
+        /// <param name="aboveFold">
+        /// Marks this image as part of the initial viewport (typically the LCP element). It is then loaded
+        /// eagerly at high priority and skips the placeholder, since lazy-loading the largest visible image
+        /// delays the very paint the metric measures.
+        /// </param>
+        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true, bool aboveFold = false)
         {
             string imageFiletype = Path.GetExtension(originalImage.Url());
             if (imageFiletype == ".svg")
             {
-                var _svgStyleGuid = Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString());
-
                 StringBuilder _sb = new StringBuilder(string.Empty);
-                var aa = originalImage.GetCropUrl(450, 450);
-                _sb.Append("<img ");
-                //var c = "class=\"";
-                _sb.Append($" src =\"{aa}");
-                _sb.Append(originalImage.Url());
-
-                _sb.Append("\"");
+                _sb.Append("<img");
+                _sb.Append(Helpers.CreateAttribute("src", originalImage.Url()));
                 if (imageAlt != null)
                 {
                     _sb.Append(Helpers.CreateAttribute("alt", imageAlt));
@@ -80,227 +81,186 @@ namespace DotSee.ResponsiveImages
                 Helpers.GetRulesetCacheKey(ruleSetName),
                 () => _ruleProvider.LoadRule(ruleSetName));
 
-            var styleGuid = Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString());
-            var config = GetPicturesqueConfig(originalImage, ruleSet, optionalQueryStringParameters);
-            var orderedBreakPoints = ruleSet.Breakpoints.OrderByDescending(x => x.BreakPointWidth);
-            var isLazyLoad = _lazyLoadSettings.IsLazyLoadEnabled(ruleSet);
+            var isLazyLoad = !aboveFold && _lazyLoadSettings.IsLazyLoadEnabled(ruleSet);
 
+            // Copy before adding the synthetic breakpoint: the rule set instance is cached and shared
+            // across requests, so mutating its list here would leak into every other render.
+            var orderedBreakPoints = ruleSet.Breakpoints.OrderByDescending(x => x.BreakPointWidth).ToList();
+
+            //Construct an artificial last breakpoint to preserve settings below smallest breakpoint
+            if (orderedBreakPoints.Count > 0 && orderedBreakPoints.Last().BreakPointWidth > 1)
             {
-
-                //Construct an artificial last breakpoint to preserve settings below smallest breakpoint
-                if (orderedBreakPoints.Last().BreakPointWidth > 1)
+                var smallest = orderedBreakPoints.Last();
+                orderedBreakPoints.Add(new RuleBreakPoint
                 {
-                    var r = new RuleBreakPoint();
-                    r.BreakPointWidth = 1;
-                    r.Width = orderedBreakPoints.Last().Width;
-                    r.Height = orderedBreakPoints.Last().Height;
-                    ruleSet.Breakpoints.Add(r);
-                    orderedBreakPoints = ruleSet.Breakpoints.OrderByDescending(x => x.BreakPointWidth);
-                }
-
-                StringBuilder sb = new StringBuilder(string.Empty);
-                sb.Append("<picture>");
-
-                // put media queries with higher specificity first (3x = 2x > regular)
-                foreach (var bp in orderedBreakPoints)
-                {
-                    int width = Helpers.GetBreakPointWidth(bp, ruleSet);
-                    int height = Helpers.GetBreakPointHeight(bp, ruleSet);
-
-                    // 3x source
-                    if (ruleSet.Use3x)
-                    {
-                        int width3x = bp.Width > 0
-                            ? (ruleSet.OriginalImageMaxWidth != null && bp.DefinedImageWidth > (int)ruleSet.OriginalImageMaxWidth)
-                                ? (int)ruleSet.OriginalImageMaxWidth * 3
-                                : bp.DefinedImageWidth * 3
-                            : 0;
-
-                        // If height is present make sure that we don't exceed maximum width or height if present.
-                        // Calculate the new height or use the original one in case calculation returns 0 which means that
-                        // either max constraints have not been set or some other issue allows us to use original height.
-                        int height3x = height > 0
-                            ? Helpers.CalcHeight(ruleSet, width3x) > 0
-                                ? Helpers.CalcHeight(ruleSet, width3x)
-                                : height * 3
-                            : 0;
-                        var mediaQueryImage3x = (height > 0)
-                            ? _imageUrlService.GetAltImageUrlOrDefault(originalImage, ruleSet, width3x, height3x, optionalQueryStringParameters)
-                            : _imageUrlService.GetAltImageOrDefault(originalImage, width, null).GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width3x, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode, furtherOptions: optionalQueryStringParameters);
-
-                        var mq3x =
-                            string.Format(
-                        "\n<source media=\"only screen and (-webkit-min-device-pixel-ratio: 2.25) and (min-width: {0}px),"
-                        + "only screen and (min--moz-device-pixel-ratio: 2.25) and (min-width: {0}px),"
-                        + "only screen and (-o-min-device-pixel-ratio: 9/4) and (min-width: {0}px),"
-                        + "only screen and (min-device-pixel-ratio: 2.25) and (min-width: {0}px),"
-                        + "only screen and (min-resolution: 2.25dppx) and (min-width: {0}px)\""
-                        + " srcset=\"" + mediaQueryImage3x
-                        + "\" />"
-                        , bp.BreakPointWidth);
-
-                        sb.Append(mq3x);
-                    }
-                    // 2x source
-                    if (ruleSet.Use2x)
-                    {
-                        int width2x = bp.Width > 0
-                            ? (ruleSet.OriginalImageMaxWidth != null && bp.DefinedImageWidth > (int)ruleSet.OriginalImageMaxWidth)
-                                ? (int)ruleSet.OriginalImageMaxWidth * 2
-                                : bp.DefinedImageWidth * 2
-                            : 0;
-                        // If height is present make sure that we don't exceed maximum width or height if present.
-                        // Calculate the new height or use the original one in case calculation returns 0 which means that
-                        // either max constraints have not been set or some other issue allows us to use original height.
-                        int height2x = height > 0
-                            ? Helpers.CalcHeight(ruleSet, width2x) > 0
-                                ? Helpers.CalcHeight(ruleSet, width2x)
-                                : height * 2
-                            : 0;
-                        var mediaQueryImage2x = (height > 0)
-                            ? _imageUrlService.GetAltImageUrlOrDefault(originalImage, ruleSet, width2x, height2x, optionalQueryStringParameters)
-                            : _imageUrlService.GetAltImageOrDefault(originalImage, width, null).GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width2x, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode, furtherOptions: optionalQueryStringParameters);
-
-                        var mq2x =
-                            string.Format(
-                        "\n<source media=\"only screen and (-webkit-min-device-pixel-ratio: 5/4) and (min-width: {0}px),"
-                        + "only screen and (min--moz-device-pixel-ratio: 1.25) and (min-width: {0}px),"
-                        + "only screen and (-o-min-device-pixel-ratio: 5/4) and (min-width: {0}px),"
-                        + "only screen and (min-device-pixel-ratio: 1.25) and (min-width: {0}px),"
-                        + "only screen and (min-resolution: 1.25dppx) and (min-width: {0}px)\""
-                        + " srcset=\"" + mediaQueryImage2x
-                        + "\" />"
-                        , bp.BreakPointWidth);
-
-                        sb.Append(mq2x);
-                    }
-
-                    // regular source
-                    int width1x = bp.Width > 0
-                        ? (ruleSet.OriginalImageMaxWidth != null && bp.DefinedImageWidth > (int)ruleSet.OriginalImageMaxWidth)
-                            ? (int)ruleSet.OriginalImageMaxWidth
-                            : bp.DefinedImageWidth
-                        : 0;
-
-                    // If height is present make sure that we don't exceed maximum width or height if present.
-                    // Calculate the new height or use the original one in case calculation returns 0 which means that
-                    // either max constraints have not been set or some other issue allows us to use original height.
-                    int height1x = height > 0
-                        ? Helpers.CalcHeight(ruleSet, width1x) > 0
-                            ? Helpers.CalcHeight(ruleSet, width1x)
-                            : height
-                        : 0;
-
-                    var mediaQueryImage1x = (height > 0)
-                            ? _imageUrlService.GetAltImageUrlOrDefault(originalImage, ruleSet, width1x, height1x, optionalQueryStringParameters)
-                            : _imageUrlService.GetAltImageOrDefault(originalImage, width, null).GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width1x, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode, furtherOptions: optionalQueryStringParameters);
-                    sb.Append("\n<source ");
-                    //sb.Append($"data-lowsrc=\"{_originalImage.GetCropUrl(width:bp.BreakPointWidth, quality:5)}\" ");
-                    sb.Append($"media=\"only screen and (min-width: {bp.BreakPointWidth}px)\" ");
-                    sb.Append("srcset=\"" + mediaQueryImage1x);     //config.SrcSetEntries.Where(x => x.Breakpoint == bp.BreakPointWidth).First().ImageUrl);
-                    sb.Append("\" />");
-                }
-
-                sb.Append("<img ");
-
-                //format lazyload and override on ruleset if exists
-                // set image class if exists
-                SetLazyLoadAndCssClasses(sb, isLazyLoad, imageClass, emitInlineLqip);
-
-                sb.Append(" src=\"");
-                sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode, furtherOptions: optionalQueryStringParameters));
-
-                sb.Append("\"");
-                if (imageAlt != null)
-                {
-                    sb.Append(Helpers.CreateAttribute("alt", imageAlt));
-                }
-                if (imageAttributes != null)
-                {
-                    sb.Append(string.Join(" ", imageAttributes
-                                                    .Where(x =>
-                                                        !(
-                                                        (imageAlt != null && x.Key.InvariantEquals("alt"))
-                                                        ||
-                                                        (imageClass != null && x.Key.InvariantEquals("class")))
-                                                        )
-                                                    .Select(x => Helpers.CreateAttribute(x.Key, x.Value))));
-                }
-                sb.Append("/>");
-
-                sb.Append("\n</picture>");
-                return new HtmlString(sb.ToString());
+                    BreakPointWidth = 1,
+                    Width = smallest.Width,
+                    Height = smallest.Height
+                });
             }
 
+            StringBuilder sb = new StringBuilder(string.Empty);
+            sb.Append("<picture>");
 
-
-            void SetLazyLoadAndCssClasses(StringBuilder sb, bool enableLazyLoad, string imageClassString, bool emitInline)
+            foreach (var bp in orderedBreakPoints)
             {
-                if (!enableLazyLoad && string.IsNullOrWhiteSpace(imageClassString)) return;
+                //Width the alternative-image lookup is keyed on, and whether this breakpoint is height-driven.
+                int width = Helpers.GetBreakPointWidth(bp, ruleSet);
+                int height = Helpers.GetBreakPointHeight(bp, ruleSet);
 
-                if (!string.IsNullOrWhiteSpace(imageClassString))
+                int width1x = ScaledWidth(bp, 1);
+                int height1x = ScaledHeight(bp, height, width1x, 1);
+
+                // One source per breakpoint carrying every DPI as an x-descriptor candidate. The browser
+                // picks by device pixel ratio on its own, which needs no media queries at all - the older
+                // vendor-prefixed -webkit-min-device-pixel-ratio sources tripled both the markup and the
+                // number of distinct image variants a CDN has to generate and bill for.
+                var candidates = new List<string> { BuildUrl(bp, width, width1x, height1x) };
+
+                if (ruleSet.Use2x)
                 {
-                    sb.Append($" class=\"{imageClassString}\"");
+                    AddDpiCandidate(candidates, bp, width, height, width1x, height1x, 2);
+                }
+                if (ruleSet.Use3x)
+                {
+                    AddDpiCandidate(candidates, bp, width, height, width1x, height1x, 3);
                 }
 
-                if (enableLazyLoad)
+                sb.Append("\n<source ");
+                sb.Append($"media=\"only screen and (min-width: {bp.BreakPointWidth}px)\" ");
+                sb.Append("srcset=\"" + string.Join(", ", candidates) + "\"");
+                if (width1x > 0 && height1x > 0)
                 {
-                    sb.Append(" loading=\"lazy\" decoding=\"async\"");
-
-                    if (emitInline)
-                    {
-                        if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
-                        {
-                            var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20);
-                            sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s\"");
-                            sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
-                        }
-                        else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
-                            && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
-                        {
-                            sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
-                            sb.Append(" onload=\"this.style.backgroundImage='none'\"");
-                        }
-                    }
+                    sb.Append($" width=\"{width1x}\" height=\"{height1x}\"");
                 }
+                sb.Append(" />");
             }
 
-            SrcSetConfig GetPicturesqueConfig(MediaWithCrops originalImage, RuleSet rs, string optionalQueryString = null)
+            sb.Append("<img");
+
+            AppendLoadingAttributes(sb, isLazyLoad, aboveFold, imageClass, imageAttributes);
+
+            if (isLazyLoad && emitInlineLqip)
             {
-                SrcSetConfig retVal = new SrcSetConfig();
-
-                foreach (var b in rs.Breakpoints.OrderBy(x => x.BreakPointWidth))
-                {
-                    SrcSetEntry s = new SrcSetEntry();
-                    int height = (b.Width > 0 && b.Height == 0)
-                        ? Helpers.CalcHeight(rs, b.Width)
-                        : (b.Height > 0)
-                            ? b.Height
-                            : 0;
-
-                    int width = (b.Height > 0 && b.Width == 0)
-                            ? Helpers.CalcWidth(rs, b.Height)
-                            : (b.Width > 0)
-                                ? b.Width
-                                : b.BreakPointWidth;
-
-                    //Respect original image max dimensions
-                    if (rs.OriginalImageMaxWidth != null && rs.OriginalImageMaxWidth > 0 && width > rs.OriginalImageMaxWidth) { width = (int)rs.OriginalImageMaxWidth; }
-                    if (rs.OriginalImageMaxHeight != null && rs.OriginalImageMaxHeight > 0 && height > rs.OriginalImageMaxHeight) { height = (int)rs.OriginalImageMaxHeight; }
-
-                    s.Breakpoint = b.BreakPointWidth;
-                    s.ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, width, height, optionalQueryString);
-
-                    retVal.SrcSetEntries.Add(s);
-                }
-
-                foreach (string size in rs.Sizes)
-                {
-                    retVal.SizeEntries.Add(size);
-                }
-
-                return (retVal);
+                AppendInlineLqip(sb, originalImage, ruleSet);
             }
+
+            sb.Append(Helpers.CreateAttribute("src", _imageUrlService.GetCropUrl(
+                originalImage, ruleSet, ruleSet.OriginalImageMaxWidth ?? 0, ruleSet.OriginalImageMaxHeight ?? 0, optionalQueryStringParameters)));
+
+            // Reserving the box up front is what stops the page reflowing as images arrive.
+            if (!HasAttribute(imageAttributes, "width") && !HasAttribute(imageAttributes, "height")
+                && Helpers.TryGetRenderedSize(originalImage, ruleSet, out int renderedWidth, out int renderedHeight))
+            {
+                sb.Append(Helpers.CreateAttribute("width", renderedWidth.ToString()));
+                sb.Append(Helpers.CreateAttribute("height", renderedHeight.ToString()));
+            }
+
+            if (imageAlt != null)
+            {
+                sb.Append(Helpers.CreateAttribute("alt", imageAlt));
+            }
+            if (imageAttributes != null)
+            {
+                sb.Append(string.Join(" ", imageAttributes
+                                                .Where(x =>
+                                                    !(
+                                                    (imageAlt != null && x.Key.InvariantEquals("alt"))
+                                                    ||
+                                                    (imageClass != null && x.Key.InvariantEquals("class")))
+                                                    )
+                                                .Select(x => Helpers.CreateAttribute(x.Key, x.Value))));
+            }
+            sb.Append("/>");
+
+            sb.Append("\n</picture>");
+            return new HtmlString(sb.ToString());
+
+            //Pixel width of the image generated for this breakpoint at the given DPI factor.
+            int ScaledWidth(RuleBreakPoint bp, int factor)
+            {
+                if (bp.Width <= 0) { return 0; }
+
+                return (ruleSet.OriginalImageMaxWidth != null && bp.DefinedImageWidth > (int)ruleSet.OriginalImageMaxWidth)
+                    ? (int)ruleSet.OriginalImageMaxWidth * factor
+                    : bp.DefinedImageWidth * factor;
+            }
+
+            // If height is present make sure that we don't exceed maximum width or height if present.
+            // Calculate the new height or use the original one in case calculation returns 0 which means that
+            // either max constraints have not been set or some other issue allows us to use original height.
+            int ScaledHeight(RuleBreakPoint bp, int breakPointHeight, int scaledWidth, int factor)
+            {
+                if (breakPointHeight <= 0) { return 0; }
+
+                var calculated = Helpers.CalcHeight(ruleSet, scaledWidth);
+                return calculated > 0 ? calculated : breakPointHeight * factor;
+            }
+
+            string BuildUrl(RuleBreakPoint bp, int altImageWidth, int targetWidth, int targetHeight)
+            {
+                return targetHeight > 0
+                    ? _imageUrlService.GetAltImageUrlOrDefault(originalImage, ruleSet, targetWidth, targetHeight, optionalQueryStringParameters)
+                    : _imageUrlService.GetCropUrl(
+                        _imageUrlService.GetAltImageOrDefault(originalImage, altImageWidth, null), ruleSet, targetWidth, 0, optionalQueryStringParameters);
+            }
+
+            void AddDpiCandidate(List<string> candidates, RuleBreakPoint bp, int altImageWidth, int breakPointHeight, int width1x, int height1x, int factor)
+            {
+                int scaledWidth = ScaledWidth(bp, factor);
+                int scaledHeight = ScaledHeight(bp, breakPointHeight, scaledWidth, factor);
+
+                //A clamped or absent width can collapse onto the 1x candidate; don't pay for a duplicate.
+                if (scaledWidth == width1x && scaledHeight == height1x) { return; }
+
+                candidates.Add(BuildUrl(bp, altImageWidth, scaledWidth, scaledHeight) + " " + factor + "x");
+            }
+        }
+
+        private void AppendLoadingAttributes(StringBuilder sb, bool enableLazyLoad, bool aboveFold, string imageClass, Dictionary<string, string> imageAttributes)
+        {
+            if (!string.IsNullOrWhiteSpace(imageClass))
+            {
+                sb.Append(Helpers.CreateAttribute("class", imageClass));
+            }
+
+            if (enableLazyLoad)
+            {
+                sb.Append(" loading=\"lazy\" decoding=\"async\"");
+                return;
+            }
+
+            if (aboveFold)
+            {
+                sb.Append(" loading=\"eager\"");
+                if (!HasAttribute(imageAttributes, "fetchpriority"))
+                {
+                    sb.Append(" fetchpriority=\"high\"");
+                }
+            }
+        }
+
+        private void AppendInlineLqip(StringBuilder sb, MediaWithCrops originalImage, RuleSet ruleSet)
+        {
+            if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
+            {
+                var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
+                    () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20));
+
+                sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s\"");
+                sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
+            }
+            else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
+                && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
+            {
+                sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
+                sb.Append(" onload=\"this.style.backgroundImage='none'\"");
+            }
+        }
+
+        private static bool HasAttribute(Dictionary<string, string> attributes, string name)
+        {
+            return attributes != null && attributes.Keys.Any(x => x.InvariantEquals(name));
         }
     }
 }

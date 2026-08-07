@@ -22,5 +22,11 @@ namespace DotSee.ResponsiveImages.Models
         public ImageCropMode CropMode { get; set; }
         public bool UseBreakPointWidthIfNoWidth { get; set; }
         public bool? LazyLoad { get; set; }
+
+        /// <summary>
+        /// When true (the default), generated crops are anchored on the editor's focal point instead of
+        /// the image centre. Set to false to restore plain centre cropping.
+        /// </summary>
+        public bool UseFocalPoint { get; set; } = true;
     }
 }

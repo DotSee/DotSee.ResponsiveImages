@@ -31,6 +31,7 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Services.AddTransient<PictureElementRenderer>();
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<ICacheService, CacheService>();
+        builder.Services.AddSingleton<ILqipService, LqipService>();
 
         // Invalidate cached image markup / CSS when content or media changes
         builder.AddNotificationHandler<ContentPublishedNotification, ResponsiveImagesCacheInvalidator>();

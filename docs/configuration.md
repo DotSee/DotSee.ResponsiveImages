@@ -48,8 +48,9 @@ Rule sets are defined as a JSON array under `DotSee:ResponsiveImages`. Each rule
 | `CropMode` | string | `"Min"` | Umbraco `ImageCropMode`: `Crop`, `Max`, `Stretch`, `Pad`, `BoxPad`, `Min`. |
 | `OriginalImageMaxWidth` | int? | null | Maximum width constraint. Images won't be generated wider than this. |
 | `OriginalImageMaxHeight` | int? | null | Maximum height constraint. Used for proportional calculations. |
-| `Use2x` | bool | false | Generate 2x (retina) `<source>` variants. |
-| `Use3x` | bool | false | Generate 3x `<source>` variants. |
+| `Use2x` | bool | false | Generate a 2x (retina) variant. In `<picture>` it is an extra `2x` candidate on the same `<source>`; in `<img srcset>` it is an extra, wider `w` candidate. |
+| `Use3x` | bool | false | As `Use2x`, at 3x. |
+| `UseFocalPoint` | bool | **true** | Anchor generated crops on the focal point the editor set in the backoffice instead of the image centre. Set to `false` for plain centre cropping. |
 | `Upscale` | bool | false | Allow upscaling beyond the original image dimensions. |
 | `UseBreakPointWidthIfNoWidth` | bool | false | If a breakpoint's `Width` is 0, use `BreakPointWidth` as the image width. |
 | `LazyLoad` | bool? | null | Override the global lazy-load setting for this rule set. `null` inherits the global value. |
@@ -164,3 +165,5 @@ To enable automatic WebP conversion, add this to your root configuration:
 ```
 
 When enabled, `&format=webp` is appended to all generated image URLs. This requires your Umbraco image processor (e.g., ImageSharp) to support WebP output.
+
+> If your site sits behind a CDN that already negotiates image formats (Cloudflare Polish, `format=auto`, and similar), leave `useWebP` off and let the CDN choose. Format negotiation is the one thing such a CDN does better than this package; picking the right *pixel dimensions* for the layout, and the right crop, is what it cannot do for you.

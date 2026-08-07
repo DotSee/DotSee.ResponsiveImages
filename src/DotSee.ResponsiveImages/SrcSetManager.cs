@@ -32,6 +32,7 @@ namespace DotSee.ResponsiveImages
         private readonly BackgroundImageModelManager _backgroundImageModelManager;
         private readonly ICacheService _cacheService;
         private readonly IConfiguration _configuration;
+        private readonly ILqipService _lqipService;
 
         #region ctor
 
@@ -46,8 +47,10 @@ namespace DotSee.ResponsiveImages
             , IGlobalLazyLoadSettings lazyLoadSettings
             , ICacheService cacheService
             , IConfiguration configuration
+            , ILqipService lqipService = null
             )
         {
+            _lqipService = lqipService;
             _ruleProvider = ruleProvider;
             _imageUrlGenerator = imageUrlGenerator;
             _publishedUrlProvider = publishedUrlProvider;
@@ -115,8 +118,7 @@ namespace DotSee.ResponsiveImages
             if (config == null) { return null; }
             if (config.SizeEntries == null || config.SizeEntries.Count() == 0) { return null; }
 
-            //SrcSetEntries are already sorted.
-            int maxWidth = config.SrcSetEntries.Skip(config.SrcSetEntries.Count() - 1).Take(1).First().Breakpoint;
+            int maxWidth = GetLayoutMaxWidth(config);
 
             StringBuilder sb = new StringBuilder(string.Empty);
 
@@ -135,7 +137,7 @@ namespace DotSee.ResponsiveImages
         /// <param name="imageAttributes"></param>
         /// <param name="optionalQueryStringParameters"> optional paramaters will get append to the final image url</param>
         /// <returns></returns>
-        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true)
+        public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true, bool aboveFold = false)
         {
             if (_configuration.GetValue<bool>("useWebP"))
             {
@@ -154,10 +156,10 @@ namespace DotSee.ResponsiveImages
                 }
 
                 var cspCached = _cacheService.GetCachedItem(
-                    BuildPictureCacheKey("pictureelement_csp", originalImage, ruleSetName, imageAlt, imageClass, cspAttributes, optionalQueryStringParameters)
+                    BuildPictureCacheKey("pictureelement_csp", originalImage, ruleSetName, imageAlt, imageClass, cspAttributes, optionalQueryStringParameters, aboveFold)
                     , () =>
                     {
-                        return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, cspAttributes, optionalQueryStringParameters, emitInlineLqip);
+                        return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, cspAttributes, optionalQueryStringParameters, emitInlineLqip, aboveFold);
                     }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
 
                 return dsId != null
@@ -166,10 +168,10 @@ namespace DotSee.ResponsiveImages
             }
 
             return _cacheService.GetCachedItem(
-                BuildPictureCacheKey("pictureelement", originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters)
+                BuildPictureCacheKey("pictureelement", originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, aboveFold)
                 , () =>
                 {
-                    return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip);
+                    return _pictureElementRenderer.CreatePictureElement(originalImage, ruleSetName, imageAlt, imageClass, imageAttributes, optionalQueryStringParameters, emitInlineLqip, aboveFold);
                 }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
         }
 
@@ -181,7 +183,8 @@ namespace DotSee.ResponsiveImages
             , string srcSetAttrName = "srcset"
             , string imageClass = ""
             , Dictionary<string, string> otherAttributes = null
-            , bool emitInlineLqip = true)
+            , bool emitInlineLqip = true
+            , bool aboveFold = false)
         {
             var ruleSet = _cacheService.GetCachedItem(
                 Helpers.GetRulesetCacheKey(ruleSetName),
@@ -191,21 +194,16 @@ namespace DotSee.ResponsiveImages
 
             if (originalImage == null || config == null) { return null; }
 
-            int maxWidth = config.SrcSetEntries
-                .OrderByDescending(z => z.Breakpoint)
-                .ThenBy(z => z.Is3x)
-                .ThenBy(z => z.Is2x)
-                .FirstOrDefault()
-                .Breakpoint;
+            int maxWidth = GetLayoutMaxWidth(config);
 
             StringBuilder sb = new StringBuilder(string.Empty);
             sb.Append("<img ");
             // format lazyload and override global if exists in rule
-            var _overriddenLazyLoad = _lazyLoadSettings.IsLazyLoadEnabled(ruleSet);
-            SetLazyLoadAttributes(srcSetAttrName, imageClass, sb, _overriddenLazyLoad);
+            var _overriddenLazyLoad = !aboveFold && _lazyLoadSettings.IsLazyLoadEnabled(ruleSet);
+            SetLazyLoadAttributes(srcSetAttrName, imageClass, sb, _overriddenLazyLoad, aboveFold, otherAttributes);
 
             sb.Append("=\"");
-            sb.Append(string.Join(",", config.SrcSetEntries.OrderBy(x => x.Breakpoint).Select(x => x.ImageUrl)));
+            sb.Append(string.Join(",", config.SrcSetEntries.OrderBy(x => x.Width).Select(x => x.ImageUrl)));
             sb.Append("\"");
             sb.Append(" sizes=\"");
             sb.Append(string.Join(",", config.SizeEntries));
@@ -213,16 +211,25 @@ namespace DotSee.ResponsiveImages
             sb.Append("\" ");
 
             sb.Append("src=\"");
-            sb.Append(originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: ruleSet.OriginalImageMaxWidth, height: ruleSet.OriginalImageMaxHeight, quality: ruleSet.ImageQuality, imageCropMode: ruleSet.CropMode));
+            sb.Append(_imageUrlService.GetCropUrl(originalImage, ruleSet, ruleSet.OriginalImageMaxWidth ?? 0, ruleSet.OriginalImageMaxHeight ?? 0));
             sb.Append("\"");
+
+            // Reserving the box up front is what stops the page reflowing as images arrive.
+            if (!HasAttribute(otherAttributes, "width") && !HasAttribute(otherAttributes, "height")
+                && Helpers.TryGetRenderedSize(originalImage, ruleSet, out int renderedWidth, out int renderedHeight))
+            {
+                sb.Append(Helpers.CreateAttribute("width", renderedWidth.ToString()));
+                sb.Append(Helpers.CreateAttribute("height", renderedHeight.ToString()));
+            }
 
             // Inline LQIP (style/onload). Skipped in CSP mode, where the caller emits nonce-tagged blocks instead.
             if (_overriddenLazyLoad && emitInlineLqip)
             {
                 if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
                 {
-                    var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode);
-                    sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s\"");
+                    var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
+                        () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode));
+                    sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s\"");
                     sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
                 }
                 else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
@@ -242,7 +249,7 @@ namespace DotSee.ResponsiveImages
             return new HtmlString(sb.ToString());
         }
 
-        private void SetLazyLoadAttributes(string srcSetAttrName, string imageClass, StringBuilder sb, bool enableLazyLoad)
+        private void SetLazyLoadAttributes(string srcSetAttrName, string imageClass, StringBuilder sb, bool enableLazyLoad, bool aboveFold, Dictionary<string, string> otherAttributes)
         {
             if (!string.IsNullOrEmpty(imageClass))
             {
@@ -255,8 +262,21 @@ namespace DotSee.ResponsiveImages
             {
                 sb.Append("loading=\"lazy\" decoding=\"async\" ");
             }
+            else if (aboveFold)
+            {
+                sb.Append("loading=\"eager\" ");
+                if (!HasAttribute(otherAttributes, "fetchpriority"))
+                {
+                    sb.Append("fetchpriority=\"high\" ");
+                }
+            }
 
             sb.Append(srcSetAttrName);
+        }
+
+        private static bool HasAttribute(Dictionary<string, string> attributes, string name)
+        {
+            return attributes != null && attributes.Keys.Any(x => x.InvariantEquals(name));
         }
 
         public string GetClassName(IPublishedContent originalImage, string ruleSetName)
@@ -278,9 +298,9 @@ namespace DotSee.ResponsiveImages
         /// <see cref="CspLqip.DsId"/> to the image element (via <see cref="DsIdAttributeName"/>) and render
         /// the element with <c>emitInlineLqip: false</c>.
         /// </summary>
-        public CspLqip GetCspLqip(MediaWithCrops originalImage, string ruleSetName, string nonce)
+        public CspLqip GetCspLqip(MediaWithCrops originalImage, string ruleSetName, string nonce, bool aboveFold = false)
         {
-            if (originalImage == null || string.IsNullOrWhiteSpace(nonce)) { return CspLqip.Inactive; }
+            if (originalImage == null || string.IsNullOrWhiteSpace(nonce) || aboveFold) { return CspLqip.Inactive; }
 
             var ruleSet = _cacheService.GetCachedItem(
                 Helpers.GetRulesetCacheKey(ruleSetName),
@@ -293,8 +313,9 @@ namespace DotSee.ResponsiveImages
 
             if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
             {
-                var lqipUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode);
-                var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{lqipUrl}');filter:blur(20px);transition:filter 0.3s}}</style>";
+                var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
+                    () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode));
+                var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s}}</style>";
                 var script = $"<script nonce=\"{nonce}\">document.querySelector('{selector}').addEventListener('load',function(){{this.style.filter='none';this.style.backgroundImage='none'}});</script>";
                 return new CspLqip(uniqueId, new HtmlString(style), new HtmlString(script));
             }
@@ -318,12 +339,12 @@ namespace DotSee.ResponsiveImages
             return GetConfig(originalImage, ruleSet);
         }
 
-        private static string BuildPictureCacheKey(string prefix, MediaWithCrops originalImage, string ruleSetName, string imageAlt, string imageClass, Dictionary<string, string> imageAttributes, string optionalQueryStringParameters)
+        private static string BuildPictureCacheKey(string prefix, MediaWithCrops originalImage, string ruleSetName, string imageAlt, string imageClass, Dictionary<string, string> imageAttributes, string optionalQueryStringParameters, bool aboveFold)
         {
             var attrsKey = imageAttributes != null
                 ? string.Join("_", imageAttributes.OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value))
                 : string.Empty;
-            return $"{prefix}_{originalImage.Id}_{ruleSetName}_{imageAlt}_{imageClass}_{attrsKey}_{optionalQueryStringParameters}";
+            return $"{prefix}_{originalImage.Id}_{ruleSetName}_{imageAlt}_{imageClass}_{attrsKey}_{optionalQueryStringParameters}_{aboveFold}";
         }
 
         /// <summary>
@@ -339,14 +360,33 @@ namespace DotSee.ResponsiveImages
             return new HtmlString(s.Insert(idx + tag.Length, attribute));
         }
 
+        /// <summary>
+        /// Builds the srcset candidates for a rule set.
+        /// </summary>
+        /// <remarks>
+        /// Every candidate is described by its real pixel width ("w"). A srcset may not mix "w" and "x"
+        /// descriptors — the HTML spec makes the whole attribute invalid and browsers drop it entirely,
+        /// falling back to src — so higher-DPI variants are emitted as additional, wider candidates.
+        /// That is also all a "w" srcset needs: the browser resolves the device pixel ratio against
+        /// <c>sizes</c> by itself and picks the right candidate.
+        /// </remarks>
         private SrcSetConfig GetConfig(MediaWithCrops originalImage, RuleSet rs)
         {
             SrcSetConfig retVal = new SrcSetConfig();
 
-            //Other sizes
+            var factors = new List<int> { 1 };
+            if (rs.Use2x) { factors.Add(2); }
+            if (rs.Use3x) { factors.Add(3); }
+
+            int maxWidth = rs.OriginalImageMaxWidth ?? 0;
+            int maxHeight = rs.OriginalImageMaxHeight ?? 0;
+
+            //Two breakpoints (or a breakpoint and a DPI variant) can resolve to the same pixel width once
+            //clamped. Emitting it twice buys nothing and costs an extra variant to generate and cache.
+            var emittedWidths = new HashSet<int>();
+
             foreach (var b in rs.Breakpoints.OrderBy(x => x.BreakPointWidth))
             {
-                SrcSetEntry s = new SrcSetEntry();
                 int height = (b.Width > 0 && b.Height == 0)
                     ? Helpers.CalcHeight(rs, b.Width)
                     : (b.Height > 0)
@@ -360,47 +400,36 @@ namespace DotSee.ResponsiveImages
                             : b.BreakPointWidth;
 
                 //Respect original image max dimensions
-                if (rs.OriginalImageMaxWidth != null && rs.OriginalImageMaxWidth > 0 && width > rs.OriginalImageMaxWidth) { width = (int)rs.OriginalImageMaxWidth; }
-                if (rs.OriginalImageMaxHeight != null && rs.OriginalImageMaxHeight > 0 && height > rs.OriginalImageMaxHeight) { height = (int)rs.OriginalImageMaxHeight; }
+                if (maxWidth > 0 && width > maxWidth) { width = maxWidth; }
+                if (maxHeight > 0 && height > maxHeight) { height = maxHeight; }
 
-                s.Breakpoint = b.BreakPointWidth;
+                foreach (int factor in factors)
+                {
+                    int candidateWidth = width * factor;
+                    int candidateHeight = height * factor;
 
-                s.Is2x = false;
-                s.Is3x = false;
+                    if (maxWidth > 0 && candidateWidth > maxWidth)
+                    {
+                        candidateWidth = maxWidth;
+                        if (candidateHeight > 0)
+                        {
+                            int recalculated = Helpers.CalcHeight(rs, candidateWidth);
+                            candidateHeight = recalculated > 0 ? recalculated : candidateHeight;
+                        }
+                    }
+                    if (maxHeight > 0 && candidateHeight > maxHeight) { candidateHeight = maxHeight; }
 
-                s.ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, width, height) + " " + b.BreakPointWidth + "w";
-                //.GetCropUrl(width: width != 0 ? (int?)width : null, height: height != 0 ? (int?)height : null, quality: rs.ImageQuality)
-                retVal.SrcSetEntries.Add(s);
-            }
+                    if (candidateWidth <= 0 || !emittedWidths.Add(candidateWidth)) { continue; }
 
-            if (rs.Use2x)
-            {
-                SrcSetEntry s = new SrcSetEntry();
-                //Only one entry for breakpoint, max image width
-                s.Breakpoint = rs.OriginalImageMaxWidth != null ? (int)rs.OriginalImageMaxWidth : rs.Breakpoints.OrderByDescending(x => x.BreakPointWidth).First().BreakPointWidth;
-
-                //Double any dimension defined
-                var width = rs.OriginalImageMaxWidth * 2;
-                var height = rs.OriginalImageMaxHeight != null ? (int)rs.OriginalImageMaxHeight * 2 : 0;
-
-                s.Is2x = true;
-                s.ImageUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width != 0 ? (int?)width : null, height: height != 0 ? (int?)height : null, quality: rs.ImageQuality, imageCropMode: rs.CropMode) + " 2x";
-                retVal.SrcSetEntries.Add(s);
-            }
-
-            if (rs.Use3x)
-            {
-                SrcSetEntry s = new SrcSetEntry();
-                //Only one entry for breakpoint, max image width
-                s.Breakpoint = rs.OriginalImageMaxWidth != null ? (int)rs.OriginalImageMaxWidth : rs.Breakpoints.OrderByDescending(x => x.BreakPointWidth).First().BreakPointWidth;
-
-                //Double any dimension defined
-                var width = rs.OriginalImageMaxWidth * 3;
-                var height = rs.OriginalImageMaxHeight != null ? (int)rs.OriginalImageMaxHeight * 3 : 0;
-
-                s.Is3x = true;
-                s.ImageUrl = originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width != 0 ? (int?)width : null, height: height != 0 ? (int?)height : null, quality: rs.ImageQuality, imageCropMode: rs.CropMode) + " 3x";
-                retVal.SrcSetEntries.Add(s);
+                    retVal.SrcSetEntries.Add(new SrcSetEntry
+                    {
+                        Breakpoint = b.BreakPointWidth,
+                        Width = candidateWidth,
+                        Is2x = factor == 2,
+                        Is3x = factor == 3,
+                        ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, candidateWidth, candidateHeight) + " " + candidateWidth + "w"
+                    });
+                }
             }
 
             foreach (string size in rs.Sizes)
@@ -409,6 +438,18 @@ namespace DotSee.ResponsiveImages
             }
 
             return (retVal);
+        }
+
+        /// <summary>
+        /// The widest layout breakpoint, used as the trailing default in <c>sizes</c>. Deliberately
+        /// ignores the extra DPI candidates: sizes describes how wide the image is laid out on the page,
+        /// not how many pixels the largest candidate contains.
+        /// </summary>
+        private static int GetLayoutMaxWidth(SrcSetConfig config)
+        {
+            var layoutEntries = config.SrcSetEntries.Where(x => !x.Is2x && !x.Is3x).ToList();
+            if (layoutEntries.Count == 0) { return 0; }
+            return layoutEntries.Max(x => x.Breakpoint);
         }
 
         #endregion Private Members

@@ -8,7 +8,7 @@ The `SrcSetManager` class is the primary API for generating responsive image mar
 
 ## CreatePictureElement
 
-Generates a complete `<picture>` element with `<source>` tags for each breakpoint, including 2x and 3x variants when configured in the rule set.
+Generates a complete `<picture>` element with one `<source>` per breakpoint. Configured 2x/3x variants are added as extra `2x`/`3x` candidates on that same `<source>`.
 
 ```csharp
 public HtmlString CreatePictureElement(
@@ -18,7 +18,8 @@ public HtmlString CreatePictureElement(
     string imageClass = "",
     Dictionary<string, string> imageAttributes = null,
     string optionalQueryStringParameters = null,
-    bool emitInlineLqip = true)
+    bool emitInlineLqip = true,
+    bool aboveFold = false)
 ```
 
 ### Parameters
@@ -32,6 +33,7 @@ public HtmlString CreatePictureElement(
 | `imageAttributes` | `Dictionary<string, string>` | Additional HTML attributes for the `<img>`. |
 | `optionalQueryStringParameters` | string | Extra query string parameters appended to all image URLs (e.g., `"format=webp"`). |
 | `emitInlineLqip` | bool | When `true` (default), LQIP preview is rendered as inline `style`/`onload` attributes. Set to `false` for CSP-safe usage where you handle LQIP externally. See [Lazy Loading - CSP](lazy-loading.md#content-security-policy-csp). |
+| `aboveFold` | bool | Set for an image visible without scrolling (typically the LCP element). Loads eagerly with `fetchpriority="high"` and no placeholder, overriding lazy loading for this call only. |
 
 ### Example
 
@@ -47,18 +49,19 @@ public HtmlString CreatePictureElement(
 
 ```html
 <picture>
-  <source media="only screen and (-webkit-min-device-pixel-ratio: 5/4) and (min-width: 1920px),..." srcset="/media/.../image.jpg?width=3840&quality=80" />
-  <source media="only screen and (min-width: 1920px)" srcset="/media/.../image.jpg?width=1920&quality=80" />
+  <source media="only screen and (min-width: 1920px)" srcset="/media/.../image.jpg?width=1920&quality=80, /media/.../image.jpg?width=3840&quality=80 2x" width="1920" height="800" />
   <!-- more sources for each breakpoint -->
-  <img class="hero-img" loading="lazy" decoding="async" src="/media/.../image.jpg?width=1920&quality=80" alt="Homepage hero" />
+  <img class="hero-img" loading="lazy" decoding="async" src="/media/.../image.jpg?width=1920&quality=80" width="1920" height="1080" alt="Homepage hero" />
 </picture>
 ```
 
 > **Note:** The fallback `<img>` `src` is generated with the rule set's `OriginalImageMaxWidth`/`OriginalImageMaxHeight`, `ImageQuality`, and `CropMode`, and includes any `optionalQueryStringParameters` (and `format=webp` when `useWebP` is enabled). It is not the raw original media URL.
 
+> `width`/`height` are emitted on both the `<source>` and the fallback `<img>` so the browser reserves the correct box before the image arrives. Supply `width`/`height` in `imageAttributes` to take over.
+
 ### Caching
 
-Results are cached for 20 minutes (sliding expiration). The cache key includes the image ID, rule set name, alt text, image class, extra attributes, and query string parameters -- so different combinations of these values are cached independently.
+Results are cached for 20 minutes (sliding expiration). The cache key includes the image ID, rule set name, alt text, image class, extra attributes, query string parameters, and the `aboveFold` flag -- so different combinations of these values are cached independently.
 
 In CSP mode (`emitInlineLqip` is `false`), the per-call `data-ds-id` is **not** part of the cache key: the markup is cached without it and the unique id is injected into the fallback `<img>` afterwards. Caching therefore stays effective under CSP.
 
@@ -76,7 +79,9 @@ public HtmlString CreateMarkup(
     string title = "",
     string srcSetAttrName = "srcset",
     string imageClass = "",
-    Dictionary<string, string> otherAttributes = null)
+    Dictionary<string, string> otherAttributes = null,
+    bool emitInlineLqip = true,
+    bool aboveFold = false)
 ```
 
 ### Parameters
@@ -90,6 +95,8 @@ public HtmlString CreateMarkup(
 | `srcSetAttrName` | string | Name of the srcset attribute. Defaults to `"srcset"`. |
 | `imageClass` | string | CSS class for the `<img>`. |
 | `otherAttributes` | `Dictionary<string, string>` | Additional HTML attributes. |
+| `emitInlineLqip` | bool | As for `CreatePictureElement`. |
+| `aboveFold` | bool | As for `CreatePictureElement`. |
 
 ### Example
 
@@ -104,8 +111,13 @@ public HtmlString CreateMarkup(
 ### Output
 
 ```html
-<img class="img-fluid" loading="lazy" decoding="async" srcset="/media/.../image.jpg?width=150 576w,/media/.../image.jpg?width=200 992w" sizes="(max-width: 576px) 100vw, 992px" src="/media/.../image.jpg?width=400&height=400&quality=70" alt="Product photo" />
+<img class="img-fluid" loading="lazy" decoding="async" srcset="/media/.../image.jpg?width=150 150w,/media/.../image.jpg?width=200 200w" sizes="(max-width: 576px) 100vw, 992px" src="/media/.../image.jpg?width=400&height=400&quality=70" width="400" height="400" alt="Product photo" />
 ```
+
+> Every candidate is described by its **own pixel width** (`w`). A `srcset` may not mix `w` and `x`
+> descriptors — the HTML spec makes the whole attribute invalid and browsers discard it, falling back
+> to `src` — so `Use2x`/`Use3x` add wider `w` candidates rather than `2x`/`3x` ones. The browser
+> combines `sizes` with the device pixel ratio and picks the right candidate by itself.
 
 ### CreateMarkup vs CreatePictureElement
 
@@ -113,7 +125,7 @@ public HtmlString CreateMarkup(
 |---|---|---|
 | HTML output | Single `<img>` | `<picture>` with multiple `<source>` |
 | Breakpoint handling | Browser picks from `srcset` based on `sizes` | Explicit media queries per breakpoint |
-| 2x/3x variants | Appended to the srcset list (e.g., `2x`, `3x`) | Separate `<source>` elements with DPI media queries |
+| 2x/3x variants | Extra wider `w` candidates in the same srcset | Extra `2x`/`3x` candidates on the same `<source>` |
 | `sizes` attribute | Yes (from config `Sizes` array) | No (media queries on each `<source>` instead) |
 | Use when | Simple responsive images with width descriptors | Fine-grained control per breakpoint, art direction |
 

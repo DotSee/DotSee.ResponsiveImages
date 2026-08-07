@@ -96,6 +96,14 @@ namespace DotSee.ResponsiveImages.TagHelpers
         [HtmlAttributeName("nonce")]
         public string Nonce { get; set; }
 
+        /// <summary>
+        /// Set this for an image that is visible without scrolling — typically the hero, and usually the
+        /// page's Largest Contentful Paint element. It is then loaded eagerly at high priority and skips
+        /// the placeholder, instead of being deferred like the images further down the page.
+        /// </summary>
+        [HtmlAttributeName("above-fold")]
+        public bool AboveFold { get; set; }
+
         #endregion
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
@@ -131,7 +139,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
                 var imageAttributes = ImageAttributes;
 
                 // CSP mode: resolve the nonce-tagged style/script blocks once and link them via data-ds-id.
-                var csp = useCsp ? srcSet.GetCspLqip(Image, RuleSet, Nonce) : CspLqip.Inactive;
+                var csp = useCsp ? srcSet.GetCspLqip(Image, RuleSet, Nonce, AboveFold) : CspLqip.Inactive;
                 if (csp.Active)
                 {
                     imageAttributes = new Dictionary<string, string>(ImageAttributes) { [SrcSetManager.DsIdAttributeName] = csp.DsId };
@@ -144,7 +152,8 @@ namespace DotSee.ResponsiveImages.TagHelpers
                     imageClass: ImageClass,
                     imageAttributes: imageAttributes.Count > 0 ? imageAttributes : null,
                     optionalQueryStringParameters: QueryString,
-                    emitInlineLqip: !useCsp));
+                    emitInlineLqip: !useCsp,
+                    aboveFold: AboveFold));
 
                 if (csp.Active)
                 {
