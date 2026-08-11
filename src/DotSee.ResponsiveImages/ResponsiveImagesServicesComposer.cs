@@ -1,6 +1,8 @@
 ﻿using DotSee.ResponsiveImages.Caching;
+using DotSee.ResponsiveImages.Cdn;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
+using DotSee.ResponsiveImages.Preloading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Generic;
@@ -32,6 +34,26 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<ICacheService, CacheService>();
         builder.Services.AddSingleton<ILqipService, LqipService>();
+        builder.Services.AddScoped<IPreloadCollector, PreloadCollector>();
+
+        // CDN purging. Bound unconditionally so the settings are readable, but the service is only the
+        // real implementation when the section explicitly enables it - installing the package must never
+        // start making outbound calls to someone's CDN.
+        builder.Services.Configure<ImageCdnSettings>(builder.Config.GetSection("DotSee:ImageCdn"));
+        builder.Services.AddHttpClient(CloudflareCdnPurgeService.HttpClientName);
+        builder.Services.AddTransient<CdnPurgeUrlBuilder>();
+
+        var cdnSettings = new ImageCdnSettings();
+        builder.Config.GetSection("DotSee:ImageCdn").Bind(cdnSettings);
+
+        if (cdnSettings.Enabled && cdnSettings.Provider.InvariantEquals("Cloudflare"))
+        {
+            builder.Services.AddSingleton<ICdnPurgeService, CloudflareCdnPurgeService>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<ICdnPurgeService, NullCdnPurgeService>();
+        }
 
         // Invalidate cached image markup / CSS when content or media changes
         builder.AddNotificationHandler<ContentPublishedNotification, ResponsiveImagesCacheInvalidator>();

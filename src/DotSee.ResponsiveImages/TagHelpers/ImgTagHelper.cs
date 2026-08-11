@@ -1,3 +1,4 @@
+using DotSee.ResponsiveImages.Preloading;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.TagHelpers;
@@ -21,7 +22,8 @@ namespace DotSee.ResponsiveImages.TagHelpers
     /// </summary>
     [HtmlTargetElement("ds:img", Attributes = "image", TagStructure = TagStructure.NormalOrSelfClosing)]
     public class ImgTagHelper(SrcSetManager srcSet,
-        ILogger<ImgTagHelper> logger) : TagHelper
+        ILogger<ImgTagHelper> logger,
+        IPreloadCollector preloadCollector = null) : TagHelper
     {
         [ViewContext]
         [HtmlAttributeNotBound]
@@ -109,6 +111,13 @@ namespace DotSee.ResponsiveImages.TagHelpers
         [HtmlAttributeName("above-fold")]
         public bool AboveFold { get; set; }
 
+        /// <summary>
+        /// Set to false to skip the &lt;link rel="preload"&gt; hint that an above-fold image otherwise
+        /// registers. Has no effect unless <see cref="AboveFold"/> is set.
+        /// </summary>
+        [HtmlAttributeName("preload")]
+        public bool Preload { get; set; } = true;
+
         #endregion
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
@@ -142,6 +151,15 @@ namespace DotSee.ResponsiveImages.TagHelpers
 
                 var useCsp = !string.IsNullOrWhiteSpace(Nonce);
                 var otherAttributes = ImageAttributes;
+
+                // Registered for the layout's <ds:preloads> to emit in <head>, which is early enough to
+                // matter; a hint written here beside the image would be discovered no sooner than the
+                // image itself.
+                if (AboveFold && Preload && preloadCollector != null)
+                {
+                    var link = srcSet.GetImagePreloadLink(Image, RuleSet);
+                    if (link != null) { preloadCollector.Add(link.ToString()); }
+                }
 
                 // CSP mode: resolve the nonce-tagged style/script blocks once and link them via data-ds-id.
                 var csp = useCsp ? srcSet.GetCspLqip(Image, RuleSet, Nonce, AboveFold) : CspLqip.Inactive;

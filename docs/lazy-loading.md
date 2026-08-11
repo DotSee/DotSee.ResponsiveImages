@@ -166,6 +166,8 @@ Both `CreatePictureElement` (and the `<ds:picture>` tag helper) and `CreateMarku
 
   Use `LazyLoad: false` on the rule set instead when *every* image using it is above the fold.
 
+  Adding `<ds:preloads />` to your layout's `<head>` goes one step further and lets the browser start fetching the hero before it parses the markup — see [Preload hints](tag-helpers.md#preload-hints-for-the-lcp-image).
+
 - **Use Blur for content-heavy pages.** The blur preview gives users a visual hint of what's loading, which feels faster than a generic placeholder.
 
 - **Use LowResImage for uniform layouts.** If all images are similar (e.g., product cards with the same aspect ratio), a single placeholder works well and reduces requests.

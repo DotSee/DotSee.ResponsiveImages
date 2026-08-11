@@ -30,6 +30,7 @@ namespace DotSee.ResponsiveImages.Tests;
 public sealed class RenderHarness
 {
     public SrcSetManager SrcSetManager { get; }
+    public PictureElementRenderer PictureRenderer { get; }
     public GlobalLazyLoadSettings Lazy { get; }
     public string ImageUrl { get; }
     public IPublishedValueFallback Fallback { get; }
@@ -99,6 +100,7 @@ public sealed class RenderHarness
         var cache = new CacheService(new MemoryCache(new MemoryCacheOptions()));
         var pictureRenderer = new PictureElementRenderer(
             imageUrlService, ruleProvider, imageUrlGenerator.Object, urlProvider.Object, Lazy, cache, lqipService);
+        PictureRenderer = pictureRenderer;
         var bgManager = new BackgroundImageModelManager(ruleProvider, Lazy, imageUrlService, cache);
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["useWebP"] = useWebP ? "true" : "false" })

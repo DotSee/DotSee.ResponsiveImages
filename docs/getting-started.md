@@ -22,6 +22,20 @@ Add the following to your `_ViewImports.cshtml`:
 
 > **Note:** The assembly name is `DotSee.ResponsiveImages`, not the namespace `DotSee.ResponsiveImages.TagHelpers`.
 
+## Enable Preload Hints (recommended)
+
+Add `<ds:preloads />` inside the `<head>` of your layout:
+
+```cshtml
+<head>
+    <meta charset="utf-8" />
+    <ds:preloads />
+    <link rel="stylesheet" href="/css/site.css" />
+</head>
+```
+
+This emits `<link rel="preload">` hints for any image you mark `above-fold="true"`, letting the browser start fetching your hero before it parses the markup — usually the largest single Largest Contentful Paint improvement available. Everything works without it; you just don't get the hints. See [Preload hints](tag-helpers.md#preload-hints-for-the-lcp-image).
+
 ## Minimal Configuration
 
 Add a rule set to your `appsettings.json`:
@@ -57,6 +71,15 @@ Add a rule set to your `appsettings.json`:
             image-alt="@Model.Image.Content.Name" />
 ```
 
+For the hero image at the top of a page, add `above-fold="true"` so it loads eagerly at high priority instead of being deferred:
+
+```cshtml
+<ds:picture image="@Model.HeroImage"
+            rule-set="default"
+            image-alt="Hero"
+            above-fold="true" />
+```
+
 ### Razor Code
 
 ```cshtml
@@ -73,3 +96,5 @@ Both produce a `<picture>` element with `<source>` tags for each breakpoint and 
 - [Tag Helpers](tag-helpers.md) - `<ds:picture>` attributes and examples
 - [Razor API](razor-api.md) - `SrcSetManager` methods for srcset, picture, and CSS backgrounds
 - [Lazy Loading](lazy-loading.md) - Native lazy loading with blur or low-res image placeholders
+- [CDN Purging](configuration.md#cdn-purging) - Optional, off by default: drop replaced images from the edge
+- [Health Checks](configuration.md#health-checks) - Backoffice checks for wasted image variants and layout shift

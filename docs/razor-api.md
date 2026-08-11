@@ -131,6 +131,27 @@ public HtmlString CreateMarkup(
 
 ---
 
+## GetPicturePreloadLinks / GetImagePreloadLink
+
+Build the `<link rel="preload" as="image">` hints for an above-the-fold image. The tag helpers call these automatically when you set `above-fold="true"`; use them directly only if you are building markup yourself.
+
+```csharp
+public HtmlString GetPicturePreloadLinks(
+    MediaWithCrops originalImage,
+    string ruleSetName,
+    string optionalQueryStringParameters = null)
+
+public HtmlString GetImagePreloadLink(
+    MediaWithCrops originalImage,
+    string ruleSetName)
+```
+
+`GetPicturePreloadLinks` returns one `<link>` per breakpoint, each carrying the same `media` and `imagesrcset` as the corresponding `<source>`, so the browser preloads exactly the image the `<picture>` will use. `GetImagePreloadLink` returns a single `<link>` with `imagesrcset`/`imagesizes` matching what `CreateMarkup` renders. Both return `null` for a null image, and sources with nothing to fetch are skipped.
+
+The output belongs in `<head>`. If you use the tag helpers, `<ds:preloads />` handles that for you — see [Preload hints](tag-helpers.md#preload-hints-for-the-lcp-image).
+
+---
+
 ## GetBreakPointsCss
 
 Generates a `<style>` tag with CSS `background-image` rules using media queries. Use this for responsive CSS background images.

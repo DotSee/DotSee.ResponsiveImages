@@ -167,3 +167,61 @@ To enable automatic WebP conversion, add this to your root configuration:
 When enabled, `&format=webp` is appended to all generated image URLs. This requires your Umbraco image processor (e.g., ImageSharp) to support WebP output.
 
 > If your site sits behind a CDN that already negotiates image formats (Cloudflare Polish, `format=auto`, and similar), leave `useWebP` off and let the CDN choose. Format negotiation is the one thing such a CDN does better than this package; picking the right *pixel dimensions* for the layout, and the right crop, is what it cannot do for you.
+
+## CDN Purging
+
+Optional. When an editor replaces an image, a CDN will keep serving the previous file until its TTL expires. This section lets the package drop the affected images from the edge when media changes.
+
+**Everything here is off by default and nothing outbound happens unless you switch it on.** Installing the package never causes a CDN call.
+
+```json
+{
+  "DotSee": {
+    "ImageCdn": {
+      "Enabled": true,
+      "Provider": "Cloudflare",
+      "ZoneId": "your-zone-id",
+      "ApiToken": "your-token",
+      "BaseUrl": "https://www.example.com",
+      "PurgeOnMediaSave": true,
+      "PurgeOnMediaDelete": true,
+      "Mode": "Files",
+      "MaxUrlsPerPurge": 100
+    }
+  }
+}
+```
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `Enabled` | bool | **false** | Master switch. While false no CDN call of any kind is made and everything below is ignored. |
+| `Provider` | string | `"Cloudflare"` | Only `Cloudflare` is implemented. Any other value falls back to doing nothing. |
+| `ZoneId` | string | null | Cloudflare zone id for the zone serving the site. Purging is skipped if missing. |
+| `ApiToken` | string | null | Token with the *Zone → Cache Purge* permission. Purging is skipped if missing. |
+| `BaseUrl` | string | null | Public origin, e.g. `https://www.example.com`. Required for `Files` mode, which needs absolute URLs. A warning is logged and the purge skipped if missing. |
+| `PurgeOnMediaSave` | bool | true | Purge when a media item is saved. Still gated by `Enabled`. |
+| `PurgeOnMediaDelete` | bool | true | Purge when a media item is deleted. Still gated by `Enabled`. |
+| `Mode` | string | `"Files"` | `Files` purges the changed media's URLs; `Everything` purges the whole zone. |
+| `MaxUrlsPerPurge` | int | 100 | Upper bound on URLs submitted per media change, so a rule set with many breakpoints can't produce an unbounded request. |
+
+> **Keep `ApiToken` out of `appsettings.json`.** Use user secrets in development and an environment variable (`DotSee__ImageCdn__ApiToken`) in production.
+
+### Modes
+
+**`Files`** purges the changed media's own URL plus the variant URLs your configured rule sets ask for. Targeted, but **best effort**: the exact URL a page requested also depends on the focal point, the cache buster and any per-call query string, none of which are knowable from a media-save event. It covers the common cases and never touches non-image assets.
+
+**`Everything`** purges the entire zone on every qualifying media change. Reliable, and very blunt — it discards the cache for your whole site, not just images. Only worth it on sites where media changes are rare.
+
+### Do you need this at all?
+
+Often not. Umbraco's crop URLs carry a cache buster derived from the media item's update date, so replacing an image usually produces *new* URLs and the stale ones are simply never requested again. Purging matters when that doesn't hold — most commonly a CDN configured to ignore query strings, or an image replaced in place at the same path.
+
+Failures are logged and never surface to the editor: a CDN being unreachable will not fail a media save.
+
+## Health Checks
+
+The package registers two checks under **Settings → Health Check → Configuration** in the backoffice. Both are pure configuration analysis — they need no media and no traffic.
+
+**Responsive Images: sizes vs. srcset candidates** compares the widths each rule set generates against the widths its `sizes` attribute can actually resolve to. A candidate wider than any slot a viewport can produce (allowing for device pixel ratio) will never be chosen by a browser — it is an image variant generated, stored and billed for nothing. Typically caused by a breakpoint whose `Width` is much larger than the layout it targets. The check also flags rule sets with no `Sizes` configured, and reports any entry it could not parse rather than guessing.
+
+**Responsive Images: layout stability** reports which rule sets can emit `width`/`height` from configuration alone (both maximums set), and which fall back to each media item's `umbracoWidth`/`umbracoHeight` to derive the missing side. Rule sets in the second group render without dimensions — and so can shift the layout as images load — for any media item missing those properties.

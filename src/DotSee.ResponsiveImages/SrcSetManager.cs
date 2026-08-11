@@ -206,8 +206,7 @@ namespace DotSee.ResponsiveImages
             sb.Append(string.Join(",", config.SrcSetEntries.OrderBy(x => x.Width).Select(x => x.ImageUrl)));
             sb.Append("\"");
             sb.Append(" sizes=\"");
-            sb.Append(string.Join(",", config.SizeEntries));
-            sb.Append(", " + maxWidth.ToString() + Enum.GetName(typeof(SizeType), SizeType.px));
+            sb.Append(BuildSizesValue(config, maxWidth));
             sb.Append("\" ");
 
             sb.Append("src=\"");
@@ -330,6 +329,89 @@ namespace DotSee.ResponsiveImages
             return CspLqip.Inactive;
         }
 
+        /// <summary>
+        /// Builds <c>&lt;link rel="preload" as="image"&gt;</c> hints for a <c>&lt;picture&gt;</c>: one per
+        /// breakpoint, carrying the same media query and srcset the picture itself will render, so the
+        /// browser evaluates them identically and preloads exactly the one it is going to use.
+        /// </summary>
+        /// <remarks>
+        /// Worth emitting only for an image visible without scrolling. The hint lets the browser start
+        /// fetching before it has parsed the markup, which is the difference the Largest Contentful Paint
+        /// measurement sees. Preloading anything below the fold competes with it and makes things worse.
+        /// </remarks>
+        public HtmlString GetPicturePreloadLinks(MediaWithCrops originalImage, string ruleSetName, string optionalQueryStringParameters = null)
+        {
+            if (originalImage == null) { return null; }
+
+            if (_configuration.GetValue<bool>("useWebP"))
+            {
+                optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
+            }
+
+            var queryString = optionalQueryStringParameters;
+
+            return _cacheService.GetCachedItem(
+                $"preload_picture_{originalImage.Id}_{ruleSetName}_{queryString}"
+                , () =>
+                {
+                    var ruleSet = _cacheService.GetCachedItem(
+                        Helpers.GetRulesetCacheKey(ruleSetName),
+                        () => _ruleProvider.LoadRule(ruleSetName));
+
+                    if (ruleSet == null) { return null; }
+
+                    //SVGs render as a plain img, so there is a single URL to point at.
+                    if (IsSvg(originalImage))
+                    {
+                        return new HtmlString(BuildLink(href: originalImage.Url()));
+                    }
+
+                    var sb = new StringBuilder();
+                    foreach (var source in _pictureElementRenderer.BuildSources(originalImage, ruleSet, queryString))
+                    {
+                        //A hint with nothing to fetch would only cost the browser a wasted evaluation.
+                        if (string.IsNullOrWhiteSpace(source.SrcSet)) { continue; }
+
+                        sb.Append(BuildLink(imageSrcSet: source.SrcSet, media: source.Media));
+                    }
+
+                    return new HtmlString(sb.ToString());
+                }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
+        }
+
+        /// <summary>
+        /// Builds a single <c>&lt;link rel="preload" as="image"&gt;</c> hint carrying the same srcset and
+        /// sizes a <c>&lt;ds:img&gt;</c> would render. See <see cref="GetPicturePreloadLinks"/>.
+        /// </summary>
+        public HtmlString GetImagePreloadLink(MediaWithCrops originalImage, string ruleSetName)
+        {
+            if (originalImage == null) { return null; }
+
+            return _cacheService.GetCachedItem(
+                $"preload_img_{originalImage.Id}_{ruleSetName}"
+                , () =>
+                {
+                    var ruleSet = _cacheService.GetCachedItem(
+                        Helpers.GetRulesetCacheKey(ruleSetName),
+                        () => _ruleProvider.LoadRule(ruleSetName));
+
+                    if (ruleSet == null) { return null; }
+
+                    if (IsSvg(originalImage))
+                    {
+                        return new HtmlString(BuildLink(href: originalImage.Url()));
+                    }
+
+                    var config = GetConfigSection(originalImage, ruleSet);
+                    if (config == null || config.SrcSetEntries.Count == 0) { return null; }
+
+                    var srcSet = string.Join(",", config.SrcSetEntries.OrderBy(x => x.Width).Select(x => x.ImageUrl));
+                    var sizes = BuildSizesValue(config, GetLayoutMaxWidth(config));
+
+                    return new HtmlString(BuildLink(imageSrcSet: srcSet, imageSizes: sizes));
+                }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
+        }
+
         #endregion Public Members
 
         #region Private Members
@@ -374,62 +456,16 @@ namespace DotSee.ResponsiveImages
         {
             SrcSetConfig retVal = new SrcSetConfig();
 
-            var factors = new List<int> { 1 };
-            if (rs.Use2x) { factors.Add(2); }
-            if (rs.Use3x) { factors.Add(3); }
-
-            int maxWidth = rs.OriginalImageMaxWidth ?? 0;
-            int maxHeight = rs.OriginalImageMaxHeight ?? 0;
-
-            //Two breakpoints (or a breakpoint and a DPI variant) can resolve to the same pixel width once
-            //clamped. Emitting it twice buys nothing and costs an extra variant to generate and cache.
-            var emittedWidths = new HashSet<int>();
-
-            foreach (var b in rs.Breakpoints.OrderBy(x => x.BreakPointWidth))
+            foreach (var candidate in CandidateLadder.GetSrcSetCandidates(rs))
             {
-                int height = (b.Width > 0 && b.Height == 0)
-                    ? Helpers.CalcHeight(rs, b.Width)
-                    : (b.Height > 0)
-                        ? b.Height
-                        : 0;
-
-                int width = (b.Height > 0 && b.Width == 0)
-                        ? Helpers.CalcWidth(rs, b.Height)
-                        : (b.Width > 0)
-                            ? b.Width
-                            : b.BreakPointWidth;
-
-                //Respect original image max dimensions
-                if (maxWidth > 0 && width > maxWidth) { width = maxWidth; }
-                if (maxHeight > 0 && height > maxHeight) { height = maxHeight; }
-
-                foreach (int factor in factors)
+                retVal.SrcSetEntries.Add(new SrcSetEntry
                 {
-                    int candidateWidth = width * factor;
-                    int candidateHeight = height * factor;
-
-                    if (maxWidth > 0 && candidateWidth > maxWidth)
-                    {
-                        candidateWidth = maxWidth;
-                        if (candidateHeight > 0)
-                        {
-                            int recalculated = Helpers.CalcHeight(rs, candidateWidth);
-                            candidateHeight = recalculated > 0 ? recalculated : candidateHeight;
-                        }
-                    }
-                    if (maxHeight > 0 && candidateHeight > maxHeight) { candidateHeight = maxHeight; }
-
-                    if (candidateWidth <= 0 || !emittedWidths.Add(candidateWidth)) { continue; }
-
-                    retVal.SrcSetEntries.Add(new SrcSetEntry
-                    {
-                        Breakpoint = b.BreakPointWidth,
-                        Width = candidateWidth,
-                        Is2x = factor == 2,
-                        Is3x = factor == 3,
-                        ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, candidateWidth, candidateHeight) + " " + candidateWidth + "w"
-                    });
-                }
+                    Breakpoint = candidate.BreakPointWidth,
+                    Width = candidate.Width,
+                    Is2x = candidate.DpiFactor == 2,
+                    Is3x = candidate.DpiFactor == 3,
+                    ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, candidate.Width, candidate.Height) + " " + candidate.Width + "w"
+                });
             }
 
             foreach (string size in rs.Sizes)
@@ -445,6 +481,42 @@ namespace DotSee.ResponsiveImages
         /// ignores the extra DPI candidates: sizes describes how wide the image is laid out on the page,
         /// not how many pixels the largest candidate contains.
         /// </summary>
+        /// <summary>
+        /// Joins the configured sizes entries with the trailing fixed default. Skips the join when no
+        /// entries are configured, which would otherwise emit a leading empty entry (", 1200px") and
+        /// make the whole attribute invalid.
+        /// </summary>
+        private static string BuildSizesValue(SrcSetConfig config, int maxWidth)
+        {
+            var trailingDefault = maxWidth.ToString() + Enum.GetName(typeof(SizeType), SizeType.px);
+
+            return config.SizeEntries == null || config.SizeEntries.Count == 0
+                ? trailingDefault
+                : string.Join(",", config.SizeEntries) + ", " + trailingDefault;
+        }
+
+        private static bool IsSvg(MediaWithCrops image)
+        {
+            return string.Equals(System.IO.Path.GetExtension(image.Url()), ".svg", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Renders one preload hint. fetchpriority="high" is what actually moves it ahead of the rest of
+        /// the page's fetches; without it the hint only removes the discovery delay.
+        /// </summary>
+        private static string BuildLink(string href = null, string imageSrcSet = null, string imageSizes = null, string media = null)
+        {
+            var sb = new StringBuilder("<link rel=\"preload\" as=\"image\"");
+
+            if (!string.IsNullOrWhiteSpace(href)) { sb.Append(Helpers.CreateAttribute("href", href)); }
+            if (!string.IsNullOrWhiteSpace(imageSrcSet)) { sb.Append(Helpers.CreateAttribute("imagesrcset", imageSrcSet)); }
+            if (!string.IsNullOrWhiteSpace(imageSizes)) { sb.Append(Helpers.CreateAttribute("imagesizes", imageSizes)); }
+            if (!string.IsNullOrWhiteSpace(media)) { sb.Append(Helpers.CreateAttribute("media", media)); }
+
+            sb.Append(" fetchpriority=\"high\" />");
+            return sb.ToString();
+        }
+
         private static int GetLayoutMaxWidth(SrcSetConfig config)
         {
             var layoutEntries = config.SrcSetEntries.Where(x => !x.Is2x && !x.Is3x).ToList();
