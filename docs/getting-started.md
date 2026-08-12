@@ -146,4 +146,3 @@ Both produce a `<picture>` element with `<source>` tags for each breakpoint and 
 - [Razor API](razor-api.md) - `SrcSetManager` methods for srcset, picture, and CSS backgrounds
 - [Lazy Loading](lazy-loading.md) - Native lazy loading with blur or low-res image placeholders
 - [CDN Purging](configuration.md#cdn-purging) - Optional, off by default: drop replaced images from the edge
-- [Health Checks](configuration.md#health-checks) - Backoffice checks for wasted image variants and layout shift
