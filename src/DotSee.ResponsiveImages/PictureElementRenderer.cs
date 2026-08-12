@@ -86,7 +86,9 @@ namespace DotSee.ResponsiveImages
             StringBuilder sb = new StringBuilder(string.Empty);
             sb.Append("<picture>");
 
-            foreach (var source in BuildSources(originalImage, ruleSet, optionalQueryStringParameters))
+            var sources = BuildSources(originalImage, ruleSet, optionalQueryStringParameters);
+
+            foreach (var source in sources)
             {
                 sb.Append("\n<source ");
                 sb.Append($"media=\"{source.Media}\" ");
@@ -110,9 +112,11 @@ namespace DotSee.ResponsiveImages
             sb.Append(Helpers.CreateAttribute("src", _imageUrlService.GetCropUrl(
                 originalImage, ruleSet, ruleSet.OriginalImageMaxWidth ?? 0, ruleSet.OriginalImageMaxHeight ?? 0, optionalQueryStringParameters)));
 
-            // Reserving the box up front is what stops the page reflowing as images arrive.
+            // Reserving the box up front is what stops the page reflowing as images arrive. Sized from
+            // the largest source the picture offers, since that is what a browser will actually display -
+            // the fallback src is generated at the rule set's ceiling and can be far larger.
             if (!HasAttribute(imageAttributes, "width") && !HasAttribute(imageAttributes, "height")
-                && Helpers.TryGetRenderedSize(originalImage, ruleSet, out int renderedWidth, out int renderedHeight))
+                && Helpers.TryGetRenderedSize(originalImage, GetLargestCandidate(sources), out int renderedWidth, out int renderedHeight))
             {
                 sb.Append(Helpers.CreateAttribute("width", renderedWidth.ToString()));
                 sb.Append(Helpers.CreateAttribute("height", renderedHeight.ToString()));
@@ -222,6 +226,15 @@ namespace DotSee.ResponsiveImages
                 sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
                 sb.Append(" onload=\"this.style.backgroundImage='none'\"");
             }
+        }
+
+        /// <summary>
+        /// The widest 1x image any source offers — the largest thing the picture can put on screen.
+        /// </summary>
+        private static ImageCandidate GetLargestCandidate(IReadOnlyList<RenderedSource> sources)
+        {
+            var widest = sources.Where(x => x.Width > 0).OrderByDescending(x => x.Width).FirstOrDefault();
+            return widest == null ? null : new ImageCandidate(0, widest.Width, widest.Height, 1);
         }
 
         private static bool HasAttribute(Dictionary<string, string> attributes, string name)

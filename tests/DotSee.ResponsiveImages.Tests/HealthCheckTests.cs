@@ -41,17 +41,31 @@ public class HealthCheckTests
     [Fact]
     public async Task SizesCheck_CandidateWiderThanAnySlot_IsWarning()
     {
-        // A breakpoint generating an image far wider than the layout it targets: the 600px breakpoint
-        // asks for a 1600px image, but nothing in sizes (nor the trailing 600px default) ever needs one.
+        // An unconditional 25vw slot caps the image at 480px on a 1920 reference viewport, and being
+        // unconditional it also shadows the trailing default. The configured 1600px image is unreachable.
         var rs = new RuleSet("oversized") { ImageQuality = 70, OriginalImageMaxWidth = 4000 };
         rs.Breakpoints.Add(new RuleBreakPoint { BreakPointWidth = 600, Width = 1600, Height = 0 });
-        rs.Sizes.Add("(max-width: 600px) 50vw");
+        rs.Sizes.Add("25vw");
 
         var status = Single(await new SizesCoverageHealthCheck(Source(rs)).GetStatusAsync());
 
         Assert.Equal(StatusResultType.Warning, status.ResultType);
         Assert.Contains("can never be selected", status.Message);
         Assert.Contains("1600w", status.Description);
+    }
+
+    [Fact]
+    public async Task SizesCheck_ConditionalEntriesOnly_TrailingDefaultKeepsCandidatesReachable()
+    {
+        // Every entry is conditional, so the trailing default (the widest 1x candidate) is reachable
+        // and nothing is orphaned.
+        var rs = new RuleSet("conditional") { ImageQuality = 70, OriginalImageMaxWidth = 4000 };
+        rs.Breakpoints.Add(new RuleBreakPoint { BreakPointWidth = 600, Width = 1600, Height = 0 });
+        rs.Sizes.Add("(max-width: 600px) 25vw");
+
+        var status = Single(await new SizesCoverageHealthCheck(Source(rs)).GetStatusAsync());
+
+        Assert.Equal(StatusResultType.Success, status.ResultType);
     }
 
     [Fact]

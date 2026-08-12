@@ -96,10 +96,16 @@ namespace DotSee.ResponsiveImages.HealthChecks
                 ruleSet.Breakpoints.Max(x => x.BreakPointWidth),
                 DefaultReferenceViewport);
 
-            //The package appends a trailing fixed default equal to the widest layout breakpoint.
-            double widestSlot = Math.Max(
-                parsed.Where(x => x.IsParsed).Max(x => x.ResolveMaxWidth(referenceViewport)),
-                candidates.Where(c => c.DpiFactor == 1).Max(c => c.BreakPointWidth));
+            double widestSlot = parsed.Where(x => x.IsParsed).Max(x => x.ResolveMaxWidth(referenceViewport));
+
+            // The package appends a trailing default equal to the widest 1x candidate. A sizes list is
+            // evaluated in order and the first match wins, so that default is only ever reached when no
+            // earlier entry is unconditional — otherwise it is dead and cannot rescue a wide candidate.
+            bool trailingDefaultIsReachable = !parsed.Any(x => x.IsParsed && x.MinViewport is null && x.MaxViewport is null);
+            if (trailingDefaultIsReachable)
+            {
+                widestSlot = Math.Max(widestSlot, candidates.Where(c => c.DpiFactor == 1).Max(c => c.Width));
+            }
 
             int maxDpi = CandidateLadder.GetDpiFactors(ruleSet).Max();
             double widestUseful = widestSlot * maxDpi;

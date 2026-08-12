@@ -26,7 +26,7 @@
 
 <h1>Srcset test</h1>
 <!--Srcset manager start-->
-@_srcSetManager.CreateMarkup(row.Image, "defaultset") 
+@_srcSetManager.CreateMarkup(row.Image, "defaultset", alt: row.Image.Content.GetAltText() ?? string.Empty, imageClass: "img-fluid")
 <!--Srcset manager end-->
  
 <h1>Dspicture test</h1>

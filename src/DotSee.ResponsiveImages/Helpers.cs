@@ -21,41 +21,44 @@ namespace DotSee.ResponsiveImages
         }
 
         /// <summary>
-        /// Works out the pixel dimensions of the image that will actually be rendered, so width/height
-        /// attributes can be emitted and the browser can reserve the right box before the image arrives
-        /// (otherwise the page shifts as it loads). Falls back to the media item's own dimensions to
-        /// derive the missing side when the rule set constrains only one of them.
+        /// Works out the pixel dimensions to declare on an image, so the browser can reserve the right
+        /// box before it arrives (otherwise the page shifts as it loads).
         /// </summary>
-        public static bool TryGetRenderedSize(IPublishedContent image, RuleSet ruleSet, out int width, out int height)
+        /// <remarks>
+        /// Derived from the largest image the markup can actually deliver, <b>not</b> from the rule set's
+        /// <see cref="RuleSet.OriginalImageMaxWidth"/>. That is only a ceiling — a rule set may cap at
+        /// 1920 while every breakpoint asks for 400px — and declaring the ceiling would tell the browser
+        /// to lay the image out several times larger than anything it will download, upscaling it on any
+        /// page without a CSS rule to cap it. The candidate's own height is used when the rule set fixes
+        /// one, so the declared aspect ratio matches the delivered crop rather than the source photo's.
+        /// </remarks>
+        /// <param name="largest">The widest candidate the srcset (or picture sources) will offer.</param>
+        public static bool TryGetRenderedSize(IPublishedContent image, ImageCandidate largest, out int width, out int height)
         {
-            width = ruleSet.OriginalImageMaxWidth ?? 0;
-            height = ruleSet.OriginalImageMaxHeight ?? 0;
+            width = 0;
+            height = 0;
 
-            if (width > 0 && height > 0) { return true; }
+            if (largest == null || largest.Width <= 0) { return false; }
 
+            width = largest.Width;
+
+            //The rule set fixed a height, so the delivered crop's own ratio is known.
+            if (largest.Height > 0)
+            {
+                height = largest.Height;
+                return true;
+            }
+
+            //Height follows the source aspect ratio; borrow it from the media item.
             if (!TryGetIntrinsicSize(image, out int intrinsicWidth, out int intrinsicHeight))
             {
                 //A single dimension is not enough to reserve a box, so emit nothing rather than guess.
                 width = 0;
-                height = 0;
                 return false;
             }
 
-            if (width > 0)
-            {
-                height = (int)Math.Round(width * (intrinsicHeight / (double)intrinsicWidth));
-            }
-            else if (height > 0)
-            {
-                width = (int)Math.Round(height * (intrinsicWidth / (double)intrinsicHeight));
-            }
-            else
-            {
-                width = intrinsicWidth;
-                height = intrinsicHeight;
-            }
-
-            return width > 0 && height > 0;
+            height = (int)Math.Round(width * (intrinsicHeight / (double)intrinsicWidth));
+            return height > 0;
         }
 
         private static bool TryReadInt(IPublishedContent content, string alias, out int value)

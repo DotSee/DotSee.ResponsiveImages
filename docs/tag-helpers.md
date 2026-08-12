@@ -198,9 +198,28 @@ By default, the tag helper renders visible error messages when required attribut
 - The `image` attribute must receive a `MediaWithCrops` object, **not** a URL string. Use `@Model.Image` (the property value), not `@Model.Image.Url()`.
 - The tag helper renders nothing if the image is null, which is safe for optional image properties.
 - SVG images are handled separately and rendered as a plain `<img>` tag (no `<picture>` element).
-- `width` and `height` attributes are emitted automatically so the browser can reserve the box before the image arrives (no layout shift). They are derived from the rule set's max dimensions, falling back to the media item's own `umbracoWidth`/`umbracoHeight` to work out the missing side. Supplying `attr-width`/`attr-height` yourself disables this.
+- `width` and `height` attributes are emitted automatically so the browser can reserve the box before the image arrives (no layout shift). They describe the **largest image the markup can actually deliver** — the widest srcset candidate, not the rule set's `OriginalImageMaxWidth` ceiling — using the candidate's own height when the rule set fixes one, so the declared aspect ratio matches the delivered crop. Supplying `attr-width`/`attr-height` yourself disables this. **See [Your CSS must cap image widths](#your-css-must-cap-image-widths) below.**
 - Crops honour the focal point the editor set in the backoffice unless the rule set sets `UseFocalPoint: false`.
 - When lazy loading with LQIP is enabled, `<ds:picture>` uses inline `style` and `onload` attributes **unless** you supply a `nonce` — see [CSP](#content-security-policy-csp).
+
+---
+
+## Your CSS must cap image widths
+
+Because the package emits `width` and `height` attributes, an image with **no CSS sizing it will lay out at exactly that pixel width**. That is what those attributes mean in HTML: they set the default rendered size, not just the aspect ratio. On a page with no rule capping images, a 1200px-wide image will occupy 1200 CSS px and can overflow its container.
+
+Nearly every CSS framework and reset already handles this, but confirm your site has the equivalent of:
+
+```css
+img {
+    max-width: 100%;
+    height: auto;
+}
+```
+
+`height: auto` matters as much as `max-width`: without it, a capped width combined with the fixed `height` attribute distorts the image.
+
+If you use Bootstrap, its `.img-fluid` class does exactly this — but it is opt-in per element, so either add it via `image-class` on every image or add the global rule above. A site relying solely on `.img-fluid` will render any image you forget to class at full declared width.
 
 ---
 

@@ -213,9 +213,11 @@ namespace DotSee.ResponsiveImages
             sb.Append(_imageUrlService.GetCropUrl(originalImage, ruleSet, ruleSet.OriginalImageMaxWidth ?? 0, ruleSet.OriginalImageMaxHeight ?? 0));
             sb.Append("\"");
 
-            // Reserving the box up front is what stops the page reflowing as images arrive.
+            // Reserving the box up front is what stops the page reflowing as images arrive. Sized from
+            // the widest srcset candidate, since that is the largest image this markup can deliver - the
+            // fallback src is generated at the rule set's ceiling and can be far larger than any of them.
             if (!HasAttribute(otherAttributes, "width") && !HasAttribute(otherAttributes, "height")
-                && Helpers.TryGetRenderedSize(originalImage, ruleSet, out int renderedWidth, out int renderedHeight))
+                && Helpers.TryGetRenderedSize(originalImage, GetLargestCandidate(ruleSet), out int renderedWidth, out int renderedHeight))
             {
                 sb.Append(Helpers.CreateAttribute("width", renderedWidth.ToString()));
                 sb.Append(Helpers.CreateAttribute("height", renderedHeight.ToString()));
@@ -271,6 +273,16 @@ namespace DotSee.ResponsiveImages
             }
 
             sb.Append(srcSetAttrName);
+        }
+
+        /// <summary>
+        /// The widest candidate the srcset offers — the largest image this markup can deliver.
+        /// </summary>
+        private static ImageCandidate GetLargestCandidate(RuleSet ruleSet)
+        {
+            return CandidateLadder.GetSrcSetCandidates(ruleSet)
+                .OrderByDescending(x => x.Width)
+                .FirstOrDefault();
         }
 
         private static bool HasAttribute(Dictionary<string, string> attributes, string name)
@@ -517,11 +529,22 @@ namespace DotSee.ResponsiveImages
             return sb.ToString();
         }
 
+        /// <summary>
+        /// The trailing default for <c>sizes</c>: the widest image the rule set actually lays out, i.e.
+        /// its widest 1x candidate.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not the widest <i>breakpoint</i>. A breakpoint is a viewport threshold, not a
+        /// display width — a rule set can switch at 1920px while only ever asking for a 400px image, and
+        /// claiming a 1920px slot makes the browser pick the largest candidate on every screen, phones
+        /// included. DPI candidates are excluded for the same reason: they are more pixels for the same
+        /// slot, not a wider slot.
+        /// </remarks>
         private static int GetLayoutMaxWidth(SrcSetConfig config)
         {
             var layoutEntries = config.SrcSetEntries.Where(x => !x.Is2x && !x.Is3x).ToList();
             if (layoutEntries.Count == 0) { return 0; }
-            return layoutEntries.Max(x => x.Breakpoint);
+            return layoutEntries.Max(x => x.Width);
         }
 
         #endregion Private Members

@@ -22,6 +22,19 @@ Add the following to your `_ViewImports.cshtml`:
 
 > **Note:** The assembly name is `DotSee.ResponsiveImages`, not the namespace `DotSee.ResponsiveImages.TagHelpers`.
 
+## Check Your CSS
+
+The package emits `width` and `height` attributes on every image so the browser can reserve the box before the image loads. That means an image with no CSS sizing it renders at exactly that pixel width. Make sure your stylesheet has:
+
+```css
+img {
+    max-width: 100%;
+    height: auto;
+}
+```
+
+Most resets and frameworks already include this. See [Your CSS must cap image widths](tag-helpers.md#your-css-must-cap-image-widths).
+
 ## Enable Preload Hints (recommended)
 
 Add `<ds:preloads />` inside the `<head>` of your layout:

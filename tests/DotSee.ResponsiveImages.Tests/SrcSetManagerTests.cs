@@ -3,6 +3,7 @@ using System.Linq;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.AspNetCore.Html;
+using Umbraco.Cms.Core.Models;
 using Xunit;
 
 namespace DotSee.ResponsiveImages.Tests;
@@ -168,8 +169,11 @@ public class SrcSetManagerTests
         var img = h.CreateImage(intrinsicWidth: 4000, intrinsicHeight: 3000);
         var html = h.SrcSetManager.CreatePictureElement(img, "defaultset", imageAlt: "a")!.ToString();
 
-        // Rule set caps width at 1920; the height follows the media item's own 4:3 ratio.
-        Assert.Contains("width=\"1920\" height=\"1440\"", html);
+        // Largest source is 1200 wide; the height follows the media item's own 4:3 ratio.
+        // Not the rule set's 1920 ceiling, which no source ever delivers.
+        Assert.Contains("<img", html);
+        Assert.Contains("width=\"1200\" height=\"900\"", html);
+        Assert.DoesNotContain("width=\"1920\"", html);
     }
 
     [Fact]
@@ -181,7 +185,30 @@ public class SrcSetManagerTests
         var html = h.SrcSetManager.CreatePictureElement(img, "defaultset", imageAlt: "a", imageAttributes: attrs)!.ToString();
 
         Assert.Contains("width=\"300\"", html);
-        Assert.DoesNotContain("width=\"1920\"", html);
+        Assert.DoesNotContain("<img width=\"1200\"", html);
+    }
+
+    [Fact]
+    public void Dimensions_DescribeTheLargestCandidate_NotTheRuleSetCeiling()
+    {
+        // The shape that broke the test site: a high ceiling with every breakpoint asking for a small
+        // square. Declaring 1920 would tell the browser to lay a 400px image out nearly 5x too large.
+        var rs = new RuleSet("small-squares") { ImageQuality = 70, OriginalImageMaxWidth = 1920, CropMode = ImageCropMode.Crop };
+        rs.Breakpoints.Add(new RuleBreakPoint { BreakPointWidth = 1920, Width = 400, Height = 400 });
+        rs.Breakpoints.Add(new RuleBreakPoint { BreakPointWidth = 320, Width = 320, Height = 400 });
+
+        var h = new RenderHarness(ruleSet: rs);
+        var img = h.CreateImage(intrinsicWidth: 4000, intrinsicHeight: 3000);
+
+        var markup = h.SrcSetManager.CreateMarkup(img, "small-squares", alt: "a")!.ToString();
+        var picture = h.SrcSetManager.CreatePictureElement(img, "small-squares", imageAlt: "a")!.ToString();
+
+        //The configured crop is square, so the declared ratio must be square too - not the source's 4:3.
+        Assert.Contains("width=\"400\" height=\"400\"", markup);
+        Assert.DoesNotContain("1920", markup);
+
+        Assert.Contains("width=\"400\" height=\"400\"", picture);
+        Assert.DoesNotContain("width=\"1920\"", picture);
     }
 
     [Fact]
@@ -315,6 +342,23 @@ public class SrcSetManagerTests
     }
 
     [Fact]
+    public void CreateMarkup_SizesFallback_IsTheImageWidthNotTheBreakpointThreshold()
+    {
+        // Switches layout at 1920px but only ever asks for a 400px image. Claiming a 1920px slot would
+        // make every device, phones included, pick the widest candidate.
+        var rs = new RuleSet("wide-breakpoint-small-image") { ImageQuality = 70, OriginalImageMaxWidth = 1920 };
+        rs.Breakpoints.Add(new RuleBreakPoint { BreakPointWidth = 1920, Width = 400, Height = 400 });
+        rs.Breakpoints.Add(new RuleBreakPoint { BreakPointWidth = 320, Width = 320, Height = 400 });
+
+        var h = new RenderHarness(ruleSet: rs);
+        var html = h.SrcSetManager.CreateMarkup(h.CreateImage(), "wide-breakpoint-small-image", alt: "a")!.ToString();
+
+        var sizes = html.Split("sizes=\"")[1].Split('"')[0];
+
+        Assert.Equal("400px", sizes);
+    }
+
+    [Fact]
     public void CreateMarkup_AboveFold_LoadsEagerlyAtHighPriority()
     {
         var h = new RenderHarness(previewType: PreviewType.Blur);
@@ -333,7 +377,9 @@ public class SrcSetManagerTests
         var img = h.CreateImage(intrinsicWidth: 4000, intrinsicHeight: 3000);
         var html = h.SrcSetManager.CreateMarkup(img, "defaultset", alt: "a")!.ToString();
 
-        Assert.Contains("width=\"1920\" height=\"1440\"", html);
+        // Widest candidate is 1200, height from the media item's 4:3 ratio - not the 1920 ceiling.
+        Assert.Contains("width=\"1200\" height=\"900\"", html);
+        Assert.DoesNotContain("width=\"1920\"", html);
     }
 
     // ---- GetSrcSet / GetSizes ----
