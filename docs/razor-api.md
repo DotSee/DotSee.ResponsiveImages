@@ -55,7 +55,7 @@ public HtmlString CreatePictureElement(
 </picture>
 ```
 
-> **Note:** The fallback `<img>` `src` is generated with the rule set's `OriginalImageMaxWidth`/`OriginalImageMaxHeight`, `ImageQuality`, and `CropMode`, and includes any `optionalQueryStringParameters` (and `format=webp` when `useWebP` is enabled). It is not the raw original media URL.
+> **Note:** The fallback `<img>` `src` is generated with the rule set's `OriginalImageMaxWidth`/`OriginalImageMaxHeight`, `ImageQuality`, and `CropMode`, and includes any `optionalQueryStringParameters` (and `format=webp` when `UseWebP` is enabled). It is not the raw original media URL.
 
 > `width`/`height` are emitted on both the `<source>` and the fallback `<img>` so the browser reserves the correct box before the image arrives. They describe the largest image the markup can deliver — the widest source — not the rule set's `OriginalImageMaxWidth` ceiling, which is only used to generate the fallback `src` and may be far larger than anything a breakpoint asks for. Supply `width`/`height` in `imageAttributes` to take over, and make sure your CSS caps image widths (see [Tag Helpers](tag-helpers.md#your-css-must-cap-image-widths)).
 

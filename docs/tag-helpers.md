@@ -23,7 +23,7 @@ Renders a `<picture>` element with one responsive `<source>` per breakpoint. Whe
 | `wrapper-class` | string | No | CSS class applied to the wrapper element. |
 | `image-class` | string | No | CSS class applied to the `<img>` inside the picture element. |
 | `image-attributes` / `attr-*` | dictionary | No | Extra attributes for the `<img>`. Supply individually as `attr-fetchpriority="high"`, `attr-id="hero"`, etc. |
-| `query-string` | string | No | Extra query string parameters appended to every generated image URL (e.g. `format=webp`). |
+| `query-string` | string | No | Extra query string parameters appended to every generated image URL (e.g. `bgcolor=fff`). For WebP across the whole site, prefer the `UseWebP` setting — see [Configuration](configuration.md#webp-support). |
 | `nonce` | string | No | CSP nonce. When set, the LQIP preview is rendered as nonce-tagged `<style>`/`<script>` blocks instead of inline `style`/`onload` (CSP-safe). See [CSP](#content-security-policy-csp). |
 | `above-fold` | bool | No | Marks an image that is visible without scrolling. See [Above-the-fold images](#above-the-fold-images). |
 | `preload` | bool | No | Set to `false` to suppress the preload hint an `above-fold` image otherwise registers. Defaults to `true`; no effect unless `above-fold` is set. See [Preload hints](#preload-hints-for-the-lcp-image). |

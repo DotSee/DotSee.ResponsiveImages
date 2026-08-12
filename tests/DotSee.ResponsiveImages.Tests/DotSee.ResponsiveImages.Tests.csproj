@@ -28,6 +28,11 @@
     <None Update="xunit.runner.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- The hand-authored appsettings schema, checked against the settings classes by SchemaTests -->
+    <None Include="..\..\src\DotSee.ResponsiveImages\schema\appsettings-schema.DotSee.ResponsiveImages.json"
+          Link="appsettings-schema.DotSee.ResponsiveImages.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

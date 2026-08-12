@@ -38,7 +38,7 @@ namespace DotSee.ResponsiveImages.HealthChecks
                     new HealthCheckStatus("No responsive image rule sets are configured.")
                     {
                         ResultType = StatusResultType.Info,
-                        Description = "Add rule sets under DotSee:ResponsiveImages in appsettings.json."
+                        Description = "Add rule sets under DotSee:ResponsiveImages:RuleSets in appsettings.json."
                     }
                 });
             }

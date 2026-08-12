@@ -22,6 +22,13 @@
     <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="72.1.0.3" Condition="$(RuntimeIdentifier.StartsWith('linux')) or $(RuntimeIdentifier.StartsWith('win')) or ('$(RuntimeIdentifier)' == '' and !$([MSBuild]::IsOSPlatform('osx')))" />
   </ItemGroup>
 
+  <!-- Stands in for the copy the package's own .targets performs for real consumers, which does not
+       run here because this project uses a ProjectReference rather than the NuGet package. -->
+  <Target Name="CopyResponsiveImagesSchema" BeforeTargets="BeforeBuild">
+    <Copy SourceFiles="..\DotSee.ResponsiveImages\schema\appsettings-schema.DotSee.ResponsiveImages.json"
+          DestinationFolder="$(MSBuildProjectDirectory)" SkipUnchangedFiles="true" />
+  </Target>
+
   <PropertyGroup>
     <!-- Razor files are needed for the backoffice to work correctly -->
     <CopyRazorGenerateFilesToPublishDirectory>true</CopyRazorGenerateFilesToPublishDirectory>

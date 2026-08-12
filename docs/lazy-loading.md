@@ -19,14 +19,21 @@ All `<source>` elements inside `<picture>` use real `srcset` attributes (not `da
 
 ### Global Settings
 
-Add the `lazyload` section at the root of your `appsettings.json`:
+Add a `LazyLoad` section under `DotSee:ResponsiveImages`, alongside your rule sets:
 
 ```json
 {
-  "lazyload": {
-    "EnablelazyLoad": true,
-    "PreviewType": "Blur",
-    "LowResImagePath": "/img/placeholder-lowres.jpg"
+  "DotSee": {
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true,
+        "PreviewType": "Blur",
+        "LowResImagePath": "/img/placeholder-lowres.jpg"
+      },
+      "RuleSets": [
+        { "Name": "default", "...": "..." }
+      ]
+    }
   }
 }
 ```
@@ -37,6 +44,8 @@ Add the `lazyload` section at the root of your `appsettings.json`:
 | `PreviewType` | string | `"Blur"` or `"LowResImage"` (see below). |
 | `LowResImagePath` | string | Path to a generic placeholder image. Only used with `"LowResImage"` preview type. |
 
+> **Upgrading:** these settings used to live in a `lazyload` section at the root of `appsettings.json`, with `DotSee:ResponsiveImages` being the rule set array itself. That layout still works, so existing sites keep running unchanged — but the settings above take precedence if you configure both. See [Configuration](configuration.md#configuration-layout).
+
 ### Per-Rule-Set Override
 
 Each rule set can override the global setting with the `LazyLoad` property:
@@ -44,16 +53,18 @@ Each rule set can override the global setting with the `LazyLoad` property:
 ```json
 {
   "DotSee": {
-    "ResponsiveImages": [
-      {
-        "Name": "hero",
-        "LazyLoad": false
-      },
-      {
-        "Name": "gallery",
-        "LazyLoad": true
-      }
-    ]
+    "ResponsiveImages": {
+      "RuleSets": [
+        {
+          "Name": "hero",
+          "LazyLoad": false
+        },
+        {
+          "Name": "gallery",
+          "LazyLoad": true
+        }
+      ]
+    }
   }
 }
 ```
@@ -66,9 +77,13 @@ Set `LazyLoad` to `null` (or omit it) to inherit the global setting.
 
 ```json
 {
-  "lazyload": {
-    "EnablelazyLoad": true,
-    "PreviewType": "Blur"
+  "DotSee": {
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true,
+        "PreviewType": "Blur"
+      }
+    }
   }
 }
 ```
@@ -100,10 +115,14 @@ Generates a tiny (20px wide) WebP version of the actual image, inlines it as a b
 
 ```json
 {
-  "lazyload": {
-    "EnablelazyLoad": true,
-    "PreviewType": "LowResImage",
-    "LowResImagePath": "/img/placeholder.jpg"
+  "DotSee": {
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true,
+        "PreviewType": "LowResImage",
+        "LowResImagePath": "/img/placeholder.jpg"
+      }
+    }
   }
 }
 ```
@@ -136,8 +155,12 @@ If `PreviewType` is not configured (defaults to 0, which is neither `Blur` nor `
 
 ```json
 {
-  "lazyload": {
-    "EnablelazyLoad": true
+  "DotSee": {
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true
+      }
+    }
   }
 }
 ```

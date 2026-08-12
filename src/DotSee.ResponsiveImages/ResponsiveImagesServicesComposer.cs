@@ -17,14 +17,17 @@ public class ResponsiveImagesServicesComposer : IComposer
     public void Compose(IUmbracoBuilder builder)
     {
         builder.Services.AddTransient<SrcSetManager>();
+
+        // Both settings live under DotSee:ResponsiveImages. See ResponsiveImagesConfiguration for the
+        // layout, and for the original one (bare array + root-level "lazyload") that is still honoured.
         var globalLazySettings = new GlobalLazyLoadSettings();
-        builder.Config.Bind("lazyload", globalLazySettings);
+        ResponsiveImagesConfiguration.GetLazyLoadSection(builder.Config).Bind(globalLazySettings);
         builder.Services.AddSingleton<IGlobalLazyLoadSettings>(globalLazySettings);
         builder.Services.AddTransient<BackgroundImageModelManager>();
 
         // read Responsive Images from appSettings
         builder.Services.Configure<List<RuleSet>>(
-            builder.Config.GetSection("DotSee:ResponsiveImages")
+            ResponsiveImagesConfiguration.GetRuleSetsSection(builder.Config)
         );
         builder.Services.AddSingleton<IConfigSource, ConfigSource>();
         builder.Services.AddSingleton<IRuleProvider, ConfigFileJsonRuleProvider>();

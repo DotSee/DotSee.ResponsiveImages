@@ -103,7 +103,10 @@ public sealed class RenderHarness
         PictureRenderer = pictureRenderer;
         var bgManager = new BackgroundImageModelManager(ruleProvider, Lazy, imageUrlService, cache);
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["useWebP"] = useWebP ? "true" : "false" })
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [ResponsiveImagesConfiguration.RootSection + ":" + ResponsiveImagesConfiguration.UseWebPKey] = useWebP ? "true" : "false"
+            })
             .Build();
 
         SrcSetManager = new SrcSetManager(

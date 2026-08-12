@@ -1,15 +1,64 @@
 # Configuration Reference
 
-All configuration lives in `appsettings.json` under two sections: `DotSee:ResponsiveImages` for rule sets, and `lazyload` for global lazy-loading settings.
+All configuration lives in `appsettings.json` under `DotSee:ResponsiveImages`.
 
-## Rule Sets
+> **Tip:** everything below is also available as editor IntelliSense — completion, hover docs and enum dropdowns. One line of setup: see [Enable appsettings IntelliSense](getting-started.md#enable-appsettings-intellisense).
 
-Rule sets are defined as a JSON array under `DotSee:ResponsiveImages`. Each rule set has a name that you reference in your views.
+## Configuration Layout
+
+`DotSee:ResponsiveImages` is an object holding your rule sets and the global lazy-loading settings:
 
 ```json
 {
   "DotSee": {
-    "ResponsiveImages": [
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true,
+        "PreviewType": "Blur",
+        "LowResImagePath": "/img/placeholder-lowres.jpg"
+      },
+      "UseWebP": false,
+      "RuleSets": [
+        { "Name": "default", "...": "..." }
+      ]
+    }
+  }
+}
+```
+
+| Key | Description |
+|---|---|
+| `RuleSets` | Array of rule sets. See [Rule Sets](#rule-sets). |
+| `LazyLoad` | Global lazy-loading settings. See [Lazy Loading Settings](#lazy-loading-settings). |
+| `UseWebP` | Append `&format=webp` to every generated URL. See [WebP Support](#webp-support). |
+
+CDN purging lives in a sibling section, `DotSee:ImageCdn` — see [CDN Purging](#cdn-purging). It is kept separate because it configures your CDN rather than image markup.
+
+### Upgrading from the earlier layout
+
+Originally `DotSee:ResponsiveImages` **was** the rule set array, with lazy loading in a `lazyload` section and the WebP switch in a `useWebP` key, both at the root of `appsettings.json`:
+
+```json
+{
+  "lazyload": { "EnablelazyLoad": true },
+  "useWebP": true,
+  "DotSee": {
+    "ResponsiveImages": [ { "Name": "default" } ]
+  }
+}
+```
+
+**That still works** — nothing is required of existing sites. The package detects which layout you are using from the keys present, and if you configure both, the values under `DotSee:ResponsiveImages` win. Moving to the layout above is a straight nesting operation: wrap the array in `"RuleSets": [ … ]`, and move `lazyload` and `useWebP` in as `LazyLoad` and `UseWebP`.
+
+## Rule Sets
+
+Rule sets are defined as a JSON array under `DotSee:ResponsiveImages:RuleSets`. Each rule set has a name that you reference in your views.
+
+```json
+{
+  "DotSee": {
+    "ResponsiveImages": {
+      "RuleSets": [
       {
         "Name": "hero",
         "OriginalImageMaxWidth": 1920,
@@ -18,7 +67,6 @@ Rule sets are defined as a JSON array under `DotSee:ResponsiveImages`. Each rule
         "CropMode": "Crop",
         "Use2x": true,
         "Use3x": false,
-        "Upscale": false,
         "UseBreakPointWidthIfNoWidth": true,
         "LazyLoad": null,
         "Sizes": [
@@ -34,7 +82,8 @@ Rule sets are defined as a JSON array under `DotSee:ResponsiveImages`. Each rule
           { "BreakPointWidth": 576, "Width": 576, "Height": 0 }
         ]
       }
-    ]
+      ]
+    }
   }
 }
 ```
@@ -51,7 +100,6 @@ Rule sets are defined as a JSON array under `DotSee:ResponsiveImages`. Each rule
 | `Use2x` | bool | false | Generate a 2x (retina) variant. In `<picture>` it is an extra `2x` candidate on the same `<source>`; in `<img srcset>` it is an extra, wider `w` candidate. |
 | `Use3x` | bool | false | As `Use2x`, at 3x. |
 | `UseFocalPoint` | bool | **true** | Anchor generated crops on the focal point the editor set in the backoffice instead of the image centre. Set to `false` for plain centre cropping. |
-| `Upscale` | bool | false | Allow upscaling beyond the original image dimensions. |
 | `UseBreakPointWidthIfNoWidth` | bool | false | If a breakpoint's `Width` is 0, use `BreakPointWidth` as the image width. |
 | `LazyLoad` | bool? | null | Override the global lazy-load setting for this rule set. `null` inherits the global value. |
 | `Sizes` | string[] | [] | CSS `sizes` attribute entries for `CreateMarkup()`. |
@@ -72,7 +120,8 @@ You can define multiple rule sets for different use cases:
 ```json
 {
   "DotSee": {
-    "ResponsiveImages": [
+    "ResponsiveImages": {
+      "RuleSets": [
       {
         "Name": "hero",
         "ImageQuality": 85,
@@ -117,21 +166,26 @@ You can define multiple rule sets for different use cases:
           { "BreakPointWidth": 576, "Width": 576 }
         ]
       }
-    ]
+      ]
+    }
   }
 }
 ```
 
 ## Lazy Loading Settings
 
-Global lazy-loading configuration is in the `lazyload` section (at the root level, not inside `DotSee`):
+Global lazy-loading configuration is the `LazyLoad` section, alongside `RuleSets`:
 
 ```json
 {
-  "lazyload": {
-    "EnablelazyLoad": true,
-    "PreviewType": "Blur",
-    "LowResImagePath": "/img/placeholder-lowres.jpg"
+  "DotSee": {
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true,
+        "PreviewType": "Blur",
+        "LowResImagePath": "/img/placeholder-lowres.jpg"
+      }
+    }
   }
 }
 ```
@@ -156,17 +210,23 @@ The per-rule-set `LazyLoad` property overrides the global setting:
 
 ## WebP Support
 
-To enable automatic WebP conversion, add this to your root configuration:
+To enable automatic WebP conversion:
 
 ```json
 {
-  "useWebP": true
+  "DotSee": {
+    "ResponsiveImages": {
+      "UseWebP": true
+    }
+  }
 }
 ```
 
-When enabled, `&format=webp` is appended to all generated image URLs. This requires your Umbraco image processor (e.g., ImageSharp) to support WebP output.
+When enabled, `&format=webp` is appended to all generated image URLs. This requires your Umbraco image processor (e.g., ImageSharp) to support WebP output. Defaults to `false`.
 
-> If your site sits behind a CDN that already negotiates image formats (Cloudflare Polish, `format=auto`, and similar), leave `useWebP` off and let the CDN choose. Format negotiation is the one thing such a CDN does better than this package; picking the right *pixel dimensions* for the layout, and the right crop, is what it cannot do for you.
+> This setting used to be a `useWebP` key at the root of `appsettings.json`. That still works; the nested setting wins if both are present. See [Upgrading from the earlier layout](#upgrading-from-the-earlier-layout).
+
+> If your site sits behind a CDN that already negotiates image formats (Cloudflare Polish, `format=auto`, and similar), leave `UseWebP` off and let the CDN choose. Format negotiation is the one thing such a CDN does better than this package; picking the right *pixel dimensions* for the layout, and the right crop, is what it cannot do for you.
 
 ## CDN Purging
 

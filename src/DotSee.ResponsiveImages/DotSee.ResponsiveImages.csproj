@@ -22,6 +22,13 @@
 			<Pack>true</Pack>
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</None>
+		<!-- JSON schema for appsettings IntelliSense. Copied to the consumer's project root by the
+		     targets file below, where their appsettings-schema.json can $ref it. -->
+		<None Include="schema\appsettings-schema.DotSee.ResponsiveImages.json" PackagePath="content\DotSee.ResponsiveImages.Schema">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+			<Pack>true</Pack>
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
 		<None Include="build\DotSee.ResponsiveImages.targets" PackagePath="buildTransitive">
 			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 			<Pack>true</Pack>

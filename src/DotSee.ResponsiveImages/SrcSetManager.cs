@@ -65,12 +65,18 @@ namespace DotSee.ResponsiveImages
 
         #endregion ctor
 
+        /// <summary>
+        /// Whether to append <c>&amp;format=webp</c> to generated URLs. Read per call rather than cached,
+        /// so the switch responds to configuration reloads.
+        /// </summary>
+        private bool UseWebP => ResponsiveImagesConfiguration.GetUseWebP(_configuration);
+
         #region Public Members
 
         public HtmlString GetBreakPointsCss(MediaWithCrops originalImage, string ruleSetName, string optionalQueryStringParameters = null, IHtmlContent nonceAttribute = null)
         {
 
-            if (_configuration.GetValue<bool>("useWebP"))
+            if (UseWebP)
             {
                 optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }
@@ -139,7 +145,7 @@ namespace DotSee.ResponsiveImages
         /// <returns></returns>
         public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true, bool aboveFold = false)
         {
-            if (_configuration.GetValue<bool>("useWebP"))
+            if (UseWebP)
             {
                 optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }
@@ -355,7 +361,7 @@ namespace DotSee.ResponsiveImages
         {
             if (originalImage == null) { return null; }
 
-            if (_configuration.GetValue<bool>("useWebP"))
+            if (UseWebP)
             {
                 optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
             }

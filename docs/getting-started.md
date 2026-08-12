@@ -22,6 +22,34 @@ Add the following to your `_ViewImports.cshtml`:
 
 > **Note:** The assembly name is `DotSee.ResponsiveImages`, not the namespace `DotSee.ResponsiveImages.TagHelpers`.
 
+## Enable appsettings IntelliSense
+
+The package ships a JSON schema describing every setting, with descriptions and dropdowns for the enum values. It is copied to your project root on build as `appsettings-schema.DotSee.ResponsiveImages.json`.
+
+To use it, add one `$ref` to the `allOf` array in your project's `appsettings-schema.json` (the file Umbraco's own schema is already wired into):
+
+```jsonc
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "allOf": [
+    { "$ref": "https://json.schemastore.org/appsettings.json" },
+    { "$ref": "appsettings-schema.Umbraco.Cms.json#" },
+    { "$ref": "appsettings-schema.DotSee.ResponsiveImages.json#" }
+  ]
+}
+```
+
+Your `appsettings.json` should already point at that file:
+
+```jsonc
+{
+  "$schema": "appsettings-schema.json",
+  ...
+}
+```
+
+That's it — Visual Studio, VS Code and Rider all pick it up with no per-developer setup. You get completion, hover documentation and validation across `DotSee:ResponsiveImages` and `DotSee:ImageCdn`.
+
 ## Check Your CSS
 
 The package emits `width` and `height` attributes on every image so the browser can reserve the box before the image loads. That means an image with no CSS sizing it renders at exactly that pixel width. Make sure your stylesheet has:
@@ -56,23 +84,31 @@ Add a rule set to your `appsettings.json`:
 ```json
 {
   "DotSee": {
-    "ResponsiveImages": [
-      {
-        "Name": "default",
-        "ImageQuality": 80,
-        "OriginalImageMaxWidth": 1920,
-        "CropMode": "Crop",
-        "Breakpoints": [
-          { "BreakPointWidth": 1920, "Width": 1200 },
-          { "BreakPointWidth": 1200, "Width": 900 },
-          { "BreakPointWidth": 768, "Width": 600 },
-          { "BreakPointWidth": 576, "Width": 400 }
-        ]
-      }
-    ]
+    "ResponsiveImages": {
+      "LazyLoad": {
+        "EnablelazyLoad": true,
+        "PreviewType": "Blur"
+      },
+      "RuleSets": [
+        {
+          "Name": "default",
+          "ImageQuality": 80,
+          "OriginalImageMaxWidth": 1920,
+          "CropMode": "Crop",
+          "Breakpoints": [
+            { "BreakPointWidth": 1920, "Width": 1200 },
+            { "BreakPointWidth": 1200, "Width": 900 },
+            { "BreakPointWidth": 768, "Width": 600 },
+            { "BreakPointWidth": 576, "Width": 400 }
+          ]
+        }
+      ]
+    }
   }
 }
 ```
+
+> Upgrading from an earlier version? The previous layout — `DotSee:ResponsiveImages` as a bare array with a root-level `lazyload` section — still works unchanged. See [Configuration Layout](configuration.md#configuration-layout).
 
 ## Quick Usage
 
