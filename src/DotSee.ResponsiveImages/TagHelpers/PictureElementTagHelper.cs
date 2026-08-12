@@ -1,4 +1,5 @@
 ﻿using DotSee.ResponsiveImages.Preloading;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
@@ -24,8 +25,15 @@ namespace DotSee.ResponsiveImages.TagHelpers
     [HtmlTargetElement("ds:picture", Attributes = "image", TagStructure = TagStructure.NormalOrSelfClosing)]
     public class PictureElementTagHelper(SrcSetManager srcSet,
     ILogger<PictureElementTagHelper> logger,
-    IPreloadCollector preloadCollector = null) : TagHelper
+    IPreloadCollector preloadCollector = null,
+    IConfiguration configuration = null) : TagHelper
     {
+        /// <summary>
+        /// Whether to stay silent instead of rendering warnings into the page. Controlled globally by
+        /// DotSee:ResponsiveImages:SuppressTagHelperWarnings.
+        /// </summary>
+        protected bool SuppressWarnings => ResponsiveImagesConfiguration.GetSuppressTagHelperWarnings(configuration);
+
         [ViewContext]
         [HtmlAttributeNotBound]
         public ViewContext? ViewContext { get; set; }
@@ -69,12 +77,6 @@ namespace DotSee.ResponsiveImages.TagHelpers
         /// </summary>
         [HtmlAttributeName("image-class")]
         public string ImageClass { get; set; }
-
-        /// <summary>
-        /// Set this to true to render friendly error messages in the output
-        /// </summary>
-        [HtmlAttributeName("suppress-warnings")]
-        public bool SuppressWarnings { get; set; }
 
         /// <summary>
         /// Additional HTML attributes to render on the fallback img element.

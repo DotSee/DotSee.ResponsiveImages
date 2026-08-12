@@ -1,5 +1,7 @@
 using System;
+using DotSee.ResponsiveImages.Preloading;
 using Microsoft.AspNetCore.Razor.TagHelpers;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace DotSee.ResponsiveImages.TagHelpers
@@ -11,8 +13,12 @@ namespace DotSee.ResponsiveImages.TagHelpers
     /// </summary>
     [Obsolete("Use <ds:picture> with a nonce attribute instead. <ds:picture-csp> will be removed in a future version.")]
     [HtmlTargetElement("ds:picture-csp", Attributes = "image", TagStructure = TagStructure.NormalOrSelfClosing)]
-    public class PictureCspTagHelper(SrcSetManager srcSet, ILogger<PictureElementTagHelper> logger)
-        : PictureElementTagHelper(srcSet, logger)
+    public class PictureCspTagHelper(
+        SrcSetManager srcSet,
+        ILogger<PictureElementTagHelper> logger,
+        IPreloadCollector preloadCollector = null,
+        IConfiguration configuration = null)
+        : PictureElementTagHelper(srcSet, logger, preloadCollector, configuration)
     {
     }
 }

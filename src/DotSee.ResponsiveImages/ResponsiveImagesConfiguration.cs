@@ -30,6 +30,7 @@ namespace DotSee.ResponsiveImages
         public const string RuleSetsKey = "RuleSets";
         public const string LazyLoadKey = "LazyLoad";
         public const string UseWebPKey = "UseWebP";
+        public const string SuppressTagHelperWarningsKey = "SuppressTagHelperWarnings";
 
         /// <summary>Where lazy-load settings used to live, at the root of appsettings.json.</summary>
         public const string LegacyLazyLoadSection = "lazyload";
@@ -74,6 +75,24 @@ namespace DotSee.ResponsiveImages
             return !string.IsNullOrWhiteSpace(nested.Value) && bool.TryParse(nested.Value, out bool enabled)
                 ? enabled
                 : configuration.GetValue<bool>(LegacyUseWebPSection);
+        }
+
+        /// <summary>
+        /// Whether the tag helpers should stay silent instead of rendering their red warning messages
+        /// into the page. Defaults to <c>false</c>, so misconfiguration is loud in development.
+        /// </summary>
+        /// <remarks>
+        /// A single switch rather than a per-element attribute, so the same views can go from noisy in
+        /// development to silent in production with one environment-specific setting — and so nobody has
+        /// to remember to suppress a warning on the one new image added just before a release.
+        /// </remarks>
+        public static bool GetSuppressTagHelperWarnings(IConfiguration configuration)
+        {
+            if (configuration == null) { return false; }
+
+            var value = configuration.GetSection(RootSection).GetSection(SuppressTagHelperWarningsKey).Value;
+
+            return !string.IsNullOrWhiteSpace(value) && bool.TryParse(value, out bool suppress) && suppress;
         }
 
         /// <summary>

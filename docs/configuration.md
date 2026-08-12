@@ -18,6 +18,7 @@ All configuration lives in `appsettings.json` under `DotSee:ResponsiveImages`.
         "LowResImagePath": "/img/placeholder-lowres.jpg"
       },
       "UseWebP": false,
+      "SuppressTagHelperWarnings": false,
       "RuleSets": [
         { "Name": "default", "...": "..." }
       ]
@@ -31,6 +32,7 @@ All configuration lives in `appsettings.json` under `DotSee:ResponsiveImages`.
 | `RuleSets` | Array of rule sets. See [Rule Sets](#rule-sets). |
 | `LazyLoad` | Global lazy-loading settings. See [Lazy Loading Settings](#lazy-loading-settings). |
 | `UseWebP` | Append `&format=webp` to every generated URL. See [WebP Support](#webp-support). |
+| `SuppressTagHelperWarnings` | Stop the tag helpers rendering warnings into the page. See [Tag Helper Warnings](#tag-helper-warnings). |
 
 CDN purging lives in a sibling section, `DotSee:ImageCdn` — see [CDN Purging](#cdn-purging). It is kept separate because it configures your CDN rather than image markup.
 
@@ -227,6 +229,30 @@ When enabled, `&format=webp` is appended to all generated image URLs. This requi
 > This setting used to be a `useWebP` key at the root of `appsettings.json`. That still works; the nested setting wins if both are present. See [Upgrading from the earlier layout](#upgrading-from-the-earlier-layout).
 
 > If your site sits behind a CDN that already negotiates image formats (Cloudflare Polish, `format=auto`, and similar), leave `UseWebP` off and let the CDN choose. Format negotiation is the one thing such a CDN does better than this package; picking the right *pixel dimensions* for the layout, and the right crop, is what it cannot do for you.
+
+## Tag Helper Warnings
+
+When an image is misconfigured — no alt text, no rule set, or an exception while rendering — the tag helpers render a red message into the page. That is useful while building and unwanted in front of visitors:
+
+```json
+{
+  "DotSee": {
+    "ResponsiveImages": {
+      "SuppressTagHelperWarnings": true
+    }
+  }
+}
+```
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `SuppressTagHelperWarnings` | bool | **false** | When true, the tag helpers stay silent instead of rendering warnings into the page. |
+
+Defaults to `false` so problems are loud where you want them loud. The natural setup is to leave it unset in `appsettings.Development.json` and set it to `true` in `appsettings.Production.json`, which lets the same views move between environments untouched.
+
+Errors are logged either way — this only controls whether the message reaches the page.
+
+> This replaces the per-element `suppress-warnings` attribute, which has been removed. If you have `suppress-warnings="true"` in a view, delete it and set this instead; leaving it in place does nothing and the warnings will reappear.
 
 ## CDN Purging
 

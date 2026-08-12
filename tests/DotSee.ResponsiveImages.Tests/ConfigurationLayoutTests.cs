@@ -129,6 +129,34 @@ public class ConfigurationLayoutTests
         Assert.False(ResponsiveImagesConfiguration.GetUseWebP(Config(new Dictionary<string, string?>())));
     }
 
+    // ---- tag helper warnings ----
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void SuppressTagHelperWarnings_IsReadFromConfiguration(string value, bool expected)
+    {
+        var config = Config(new Dictionary<string, string?>
+        {
+            ["DotSee:ResponsiveImages:SuppressTagHelperWarnings"] = value
+        });
+
+        Assert.Equal(expected, ResponsiveImagesConfiguration.GetSuppressTagHelperWarnings(config));
+    }
+
+    [Fact]
+    public void SuppressTagHelperWarnings_DefaultsToOff_SoMisconfigurationIsVisible()
+    {
+        Assert.False(ResponsiveImagesConfiguration.GetSuppressTagHelperWarnings(Config(new Dictionary<string, string?>())));
+    }
+
+    [Fact]
+    public void SuppressTagHelperWarnings_TreatsMissingConfigurationAsOff()
+    {
+        //Tag helpers accept a null IConfiguration so they stay constructible outside DI.
+        Assert.False(ResponsiveImagesConfiguration.GetSuppressTagHelperWarnings(null));
+    }
+
     // ---- layout detection ----
 
     [Theory]

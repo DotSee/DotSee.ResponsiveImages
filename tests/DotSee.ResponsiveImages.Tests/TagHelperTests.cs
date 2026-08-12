@@ -129,21 +129,67 @@ public class TagHelperTests
     }
 
     [Fact]
-    public void DsPicture_MissingAlt_WithSuppressWarnings_NoWarning()
+    public void DsPicture_MissingAlt_WarningsSuppressedBySetting_NoWarning()
     {
-        var h = new RenderHarness();
-        var th = new PictureElementTagHelper(h.SrcSetManager, NullLogger<PictureElementTagHelper>.Instance)
+        var h = new RenderHarness(suppressTagHelperWarnings: true);
+        var th = new PictureElementTagHelper(h.SrcSetManager, NullLogger<PictureElementTagHelper>.Instance, null, h.Configuration)
         {
             Image = h.CreateImage(),
             RuleSet = "defaultset",
-            ImageAlt = "",
-            SuppressWarnings = true
+            ImageAlt = ""
         };
 
         var html = Render(th, "ds:picture");
 
         Assert.DoesNotContain("provide an image alt", html);
         Assert.Contains("<picture", html);
+    }
+
+    [Fact]
+    public void DsImg_MissingAlt_WarningsSuppressedBySetting_NoWarning()
+    {
+        var h = new RenderHarness(suppressTagHelperWarnings: true);
+        var th = new ImgTagHelper(h.SrcSetManager, NullLogger<ImgTagHelper>.Instance, null, h.Configuration)
+        {
+            Image = h.CreateImage(),
+            RuleSet = "defaultset",
+            ImageAlt = ""
+        };
+
+        var html = Render(th, "ds:img");
+
+        Assert.DoesNotContain("provide an image alt", html);
+        Assert.Contains("<img", html);
+    }
+
+    [Fact]
+    public void DsBackground_MissingRuleSet_WarningsSuppressedBySetting_NoWarning()
+    {
+        var h = new RenderHarness(suppressTagHelperWarnings: true);
+        var th = new BackgroundImageTagHelper(h.SrcSetManager, NullLogger<BackgroundImageTagHelper>.Instance, h.Configuration)
+        {
+            Image = h.CreateImage(),
+            RuleSet = ""
+        };
+
+        var html = Render(th, "ds:background");
+
+        Assert.DoesNotContain("rule set", html, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DsBackground_MissingRuleSet_RendersWarningByDefault()
+    {
+        var h = new RenderHarness();
+        var th = new BackgroundImageTagHelper(h.SrcSetManager, NullLogger<BackgroundImageTagHelper>.Instance, h.Configuration)
+        {
+            Image = h.CreateImage(),
+            RuleSet = ""
+        };
+
+        var html = Render(th, "ds:background");
+
+        Assert.Contains("rule set", html, System.StringComparison.OrdinalIgnoreCase);
     }
 
     // ---- ds:img ----

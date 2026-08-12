@@ -31,6 +31,7 @@ public sealed class RenderHarness
 {
     public SrcSetManager SrcSetManager { get; }
     public PictureElementRenderer PictureRenderer { get; }
+    public IConfiguration Configuration { get; private set; }
     public GlobalLazyLoadSettings Lazy { get; }
     public string ImageUrl { get; }
     public IPublishedValueFallback Fallback { get; }
@@ -48,7 +49,8 @@ public sealed class RenderHarness
         PreviewType previewType = PreviewType.LowResImage,
         string lowResPath = "/img/lowres.jpg",
         RuleSet? ruleSet = null,
-        ILqipService? lqipService = null)
+        ILqipService? lqipService = null,
+        bool suppressTagHelperWarnings = false)
     {
         ImageUrl = imageUrl;
         RuleSet = ruleSet ?? DefaultRuleSet();
@@ -105,9 +107,11 @@ public sealed class RenderHarness
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [ResponsiveImagesConfiguration.RootSection + ":" + ResponsiveImagesConfiguration.UseWebPKey] = useWebP ? "true" : "false"
+                [ResponsiveImagesConfiguration.RootSection + ":" + ResponsiveImagesConfiguration.UseWebPKey] = useWebP ? "true" : "false",
+                [ResponsiveImagesConfiguration.RootSection + ":" + ResponsiveImagesConfiguration.SuppressTagHelperWarningsKey] = suppressTagHelperWarnings ? "true" : "false"
             })
             .Build();
+        Configuration = config;
 
         SrcSetManager = new SrcSetManager(
             ruleProvider, imageUrlGenerator.Object, urlProvider.Object, imageUrlService,

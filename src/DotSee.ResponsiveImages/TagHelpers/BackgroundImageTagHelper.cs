@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Html;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
@@ -19,8 +20,15 @@ namespace DotSee.ResponsiveImages.TagHelpers
     /// </summary>
     [HtmlTargetElement("ds:background", Attributes = "image", TagStructure = TagStructure.NormalOrSelfClosing)]
     public class BackgroundImageTagHelper(SrcSetManager srcSet,
-        ILogger<BackgroundImageTagHelper> logger) : TagHelper
+        ILogger<BackgroundImageTagHelper> logger,
+        IConfiguration configuration = null) : TagHelper
     {
+        /// <summary>
+        /// Whether to stay silent instead of rendering warnings into the page. Controlled globally by
+        /// DotSee:ResponsiveImages:SuppressTagHelperWarnings.
+        /// </summary>
+        private bool SuppressWarnings => ResponsiveImagesConfiguration.GetSuppressTagHelperWarnings(configuration);
+
         [ViewContext]
         [HtmlAttributeNotBound]
         public ViewContext? ViewContext { get; set; }
@@ -57,12 +65,6 @@ namespace DotSee.ResponsiveImages.TagHelpers
         /// </summary>
         [HtmlAttributeName("nonce")]
         public string Nonce { get; set; }
-
-        /// <summary>
-        /// Set this to true to render friendly error messages in the output
-        /// </summary>
-        [HtmlAttributeName("suppress-warnings")]
-        public bool SuppressWarnings { get; set; }
 
         #endregion
 

@@ -27,7 +27,6 @@ Renders a `<picture>` element with one responsive `<source>` per breakpoint. Whe
 | `nonce` | string | No | CSP nonce. When set, the LQIP preview is rendered as nonce-tagged `<style>`/`<script>` blocks instead of inline `style`/`onload` (CSP-safe). See [CSP](#content-security-policy-csp). |
 | `above-fold` | bool | No | Marks an image that is visible without scrolling. See [Above-the-fold images](#above-the-fold-images). |
 | `preload` | bool | No | Set to `false` to suppress the preload hint an `above-fold` image otherwise registers. Defaults to `true`; no effect unless `above-fold` is set. See [Preload hints](#preload-hints-for-the-lcp-image). |
-| `suppress-warnings` | bool | No | Set to `true` to hide validation error messages from the rendered output. Defaults to `false`. |
 
 Both `<ds:picture>` and `<ds:img>` accept `above-fold`, `preload`, `nonce` and `attr-*`.
 
@@ -175,23 +174,28 @@ A typical usage inside a block list component:
 
 ### Suppressing Warnings
 
-By default, the tag helper renders visible error messages when required attributes are missing. In production, suppress these:
+By default the tag helpers render visible error messages when something is misconfigured. This is a **single global setting**, not a per-element attribute, so the same views can be noisy in development and silent in production without touching any markup:
 
-```cshtml
-<ds:picture image="@Model.Image"
-            rule-set="default"
-            image-alt="@Model.AltText"
-            suppress-warnings="true" />
+```json
+{
+  "DotSee": {
+    "ResponsiveImages": {
+      "SuppressTagHelperWarnings": true
+    }
+  }
+}
 ```
+
+Leave it out (or `false`) in `appsettings.Development.json` and set it to `true` in `appsettings.Production.json`. Errors are written to the log either way, so suppressing the on-page message does not hide the problem — it only stops visitors seeing it.
 
 ### Error Handling
 
 | Condition | Behavior |
 |---|---|
 | `image` is null | Output is suppressed entirely (nothing rendered). An error is logged. |
-| `image-alt` is empty | A warning div is rendered (unless `suppress-warnings="true"`). |
-| `rule-set` is empty | A warning div is rendered (unless `suppress-warnings="true"`). |
-| Exception during rendering | A warning div is rendered with the error message (unless `suppress-warnings="true"`). |
+| `image-alt` is empty | A warning div is rendered (unless `SuppressTagHelperWarnings` is true). |
+| `rule-set` is empty | A warning div is rendered (unless `SuppressTagHelperWarnings` is true). |
+| Exception during rendering | A warning div is rendered with the error message (unless `SuppressTagHelperWarnings` is true). |
 
 ### Important Notes
 
