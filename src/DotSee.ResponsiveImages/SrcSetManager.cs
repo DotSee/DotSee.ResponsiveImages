@@ -542,19 +542,28 @@ namespace DotSee.ResponsiveImages
         /// Null results (unknown name, or a transient failure inside the provider) are cached briefly
         /// rather than for the full window, so a hiccup doesn't pin every image to the error path.
         /// </summary>
+        /// <remarks>
+        /// The warning is emitted inside the factory, i.e. only when the provider is actually consulted.
+        /// Logging it on the way out instead would repeat it for every cache hit on the negative entry —
+        /// one typo'd rule set on a page of fifty images meant fifty identical warnings per request. Once
+        /// per negative-cache window still surfaces the misconfiguration, without the flood.
+        /// </remarks>
         private RuleSet LoadRuleSet(string ruleSetName)
         {
-            var ruleSet = _cacheService.GetCachedItem(
+            return _cacheService.GetCachedItem(
                 Helpers.GetRulesetCacheKey(ruleSetName),
-                () => _ruleProvider.LoadRule(ruleSetName),
+                () =>
+                {
+                    var loaded = _ruleProvider.LoadRule(ruleSetName);
+
+                    if (loaded == null)
+                    {
+                        _logger?.LogWarning("Rule set '{RuleSetName}' was not found in DotSee:ResponsiveImages; nothing will be rendered for it.", ruleSetName);
+                    }
+
+                    return loaded;
+                },
                 nullResultTimeout: TimeSpan.FromMinutes(2));
-
-            if (ruleSet == null)
-            {
-                _logger?.LogWarning("Rule set '{RuleSetName}' was not found in DotSee:ResponsiveImages; nothing will be rendered for it.", ruleSetName);
-            }
-
-            return ruleSet;
         }
 
         /// <summary>

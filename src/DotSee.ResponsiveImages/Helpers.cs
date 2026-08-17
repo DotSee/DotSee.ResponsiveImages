@@ -151,11 +151,18 @@ namespace DotSee.ResponsiveImages
         /// alt text, titles, classes, URLs and caller-supplied attribute dictionaries, all of which can
         /// carry editor-entered content, so encoding anywhere else would leave a gap. The name is
         /// restricted to attribute-legal characters so a hostile dictionary key cannot smuggle in a
-        /// second attribute.
+        /// second attribute, and the attribute is dropped entirely if nothing usable is left.
         /// </summary>
         public static string CreateAttribute(string title, string value)
         {
-            return (string.Concat(" ", SanitizeAttributeName(title), "=\"", HtmlAttributeEncode(value), "\""));
+            var name = SanitizeAttributeName(title);
+
+            // Stripping can leave something that is not a usable attribute name at all — nothing (for a
+            // key made entirely of illegal characters, which would emit a nameless ="value") or a
+            // digit-leading name. Emit no attribute rather than malformed markup.
+            if (!IsValidAttributeName(name)) { return string.Empty; }
+
+            return (string.Concat(" ", name, "=\"", HtmlAttributeEncode(value), "\""));
         }
 
         /// <summary>HTML-encodes text for use inside a double-quoted attribute value.</summary>
@@ -185,12 +192,19 @@ namespace DotSee.ResponsiveImages
         /// Makes a URL safe to interpolate into a CSS <c>url('…')</c>. Inside a &lt;style&gt; block HTML
         /// entities are NOT decoded, so HTML-encoding is the wrong tool there; percent-encoding the
         /// CSS-significant characters preserves the URL's meaning in both the attribute and the
-        /// stylesheet context. Data URIs are our own base64 output and pass through untouched.
+        /// stylesheet context.
         /// </summary>
+        /// <remarks>
+        /// Applies to <c>data:</c> URIs too. They are not automatically ours: <c>LowResImagePath</c> is
+        /// configuration and <see cref="LazyLoad.ILqipService"/> is a replaceable public interface, so a
+        /// data URI carrying a quote could otherwise close the surrounding <c>style</c> attribute, and one
+        /// carrying <c>&lt;/style&gt;</c> could close a whole &lt;style&gt; block. Our own base64 output
+        /// contains none of the replaced characters, so this is a no-op for it; a plain-text SVG data URI
+        /// comes out percent-encoded, which is the canonical form for CSS <c>url()</c> anyway.
+        /// </remarks>
         public static string SanitizeCssUrl(string url)
         {
             if (string.IsNullOrEmpty(url)) { return url ?? string.Empty; }
-            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) { return url; }
 
             return url
                 .Replace("\\", "%5C")
@@ -204,17 +218,26 @@ namespace DotSee.ResponsiveImages
         }
 
         /// <summary>
-        /// True when the string is a plain HTML attribute name (letter first, then letters, digits or
-        /// dashes). Used to whitelist caller-supplied attribute <em>names</em>, which are written into
-        /// the tag as markup and therefore cannot be made safe by encoding.
+        /// True when the string is a usable HTML attribute name: an ASCII letter or underscore first,
+        /// then letters, digits, <c>-</c>, <c>_</c>, <c>:</c> or <c>.</c>. Used to whitelist
+        /// caller-supplied attribute <em>names</em>, which are written into the tag as markup and
+        /// therefore cannot be made safe by encoding.
         /// </summary>
+        /// <remarks>
+        /// The trailing set matches what <see cref="SanitizeAttributeName"/> preserves, so names that are
+        /// legal but not plain — <c>xlink:href</c>, <c>data_foo</c>, framework-style <c>v-bind.sync</c> —
+        /// are kept rather than rejected. A leading digit, <c>-</c>, <c>:</c> or <c>.</c> is rejected:
+        /// none of those start a valid attribute name.
+        /// </remarks>
         public static bool IsValidAttributeName(string name)
         {
-            if (string.IsNullOrEmpty(name) || !char.IsAsciiLetter(name[0])) { return false; }
+            if (string.IsNullOrEmpty(name)) { return false; }
+            if (!char.IsAsciiLetter(name[0]) && name[0] != '_') { return false; }
 
             for (int i = 1; i < name.Length; i++)
             {
-                if (!char.IsAsciiLetterOrDigit(name[i]) && name[i] != '-') { return false; }
+                char c = name[i];
+                if (!char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_' && c != ':' && c != '.') { return false; }
             }
 
             return true;

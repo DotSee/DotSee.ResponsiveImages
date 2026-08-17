@@ -64,6 +64,32 @@ public class AuditFixTests
         Assert.DoesNotContain("onload=\"alert", html);
     }
 
+    [Theory]
+    [InlineData("!!!", "")]                     // nothing legal survives - would emit a nameless ="value"
+    [InlineData("1abc", "")]                    // digit-leading names are not valid attribute names
+    [InlineData("-x", "")]
+    [InlineData("data-x", " data-x=\"v\"")]
+    [InlineData("xlink:href", " xlink:href=\"v\"")]   // legal-but-not-plain names must survive
+    [InlineData("data_foo", " data_foo=\"v\"")]
+    [InlineData("v-bind.sync", " v-bind.sync=\"v\"")]
+    [InlineData("_private", " _private=\"v\"")]
+    public void AttributeNamesThatSanitizeToNothingUsableAreDropped(string name, string expected)
+    {
+        Assert.Equal(expected, Helpers.CreateAttribute(name, "v"));
+    }
+
+    [Fact]
+    public void AnUnusableAttributeNameDoesNotEmitANamelessAttribute()
+    {
+        var h = new RenderHarness();
+        var html = h.SrcSetManager.CreateMarkup(
+            h.CreateImage(), "defaultset", alt: "a",
+            otherAttributes: new Dictionary<string, string> { ["***"] = "boom" })!.ToString();
+
+        Assert.DoesNotContain("=\"boom\"", html);
+        Assert.DoesNotContain(" =\"", html);
+    }
+
     [Fact]
     public void UnicodeAltTextStaysReadable()
     {
@@ -72,6 +98,59 @@ public class AuditFixTests
         var html = h.SrcSetManager.CreateMarkup(h.CreateImage(), "defaultset", alt: "Καρέκλα στον κήπο")!.ToString();
 
         Assert.Contains("alt=\"Καρέκλα στον κήπο\"", html);
+    }
+
+    // ---- CSS url() sanitisation ---------------------------------------------------------------------
+
+    [Fact]
+    public void OurOwnBase64PlaceholderPassesThroughCssSanitisationUnchanged()
+    {
+        // Base64 contains none of the replaced characters, so real placeholders are byte-identical.
+        const string dataUri = "data:image/webp;base64,UklGRi4AAABXRUJQVlA4WAoA+/9x==";
+        Assert.Equal(dataUri, Helpers.SanitizeCssUrl(dataUri));
+    }
+
+    [Fact]
+    public void AHostileDataUriCannotCloseTheStyleAttribute()
+    {
+        // LowResImagePath is configuration and ILqipService is a replaceable public interface, so a
+        // data: URI is not automatically ours - it used to bypass sanitisation entirely.
+        var h = new RenderHarness(
+            previewType: PreviewType.LowResImage,
+            lowResPath: "data:image/gif;base64,AAA\" onmouseover=\"alert(1)");
+
+        var html = h.SrcSetManager.CreateMarkup(h.CreateImage(), "defaultset", alt: "a")!.ToString();
+
+        Assert.DoesNotContain("onmouseover=\"alert", html);
+        Assert.Contains("%22", html);   // the quote is percent-encoded inside the url()
+    }
+
+    [Fact]
+    public void AHostileDataUriCannotCloseAStyleElement()
+    {
+        // Worse consequence in the CSP path: escaping a <style> block means script injection.
+        var h = new RenderHarness(
+            previewType: PreviewType.Blur,
+            lqipService: new FakeLqipService("data:image/gif;base64,AAA</style><script>alert(1)</script>"));
+
+        var csp = h.SrcSetManager.GetCspLqip(h.CreateImage(), "defaultset", "abc123");
+
+        Assert.True(csp.Active);
+        var style = csp.StyleBlock!.ToString();
+        Assert.DoesNotContain("</style><script>", style);
+        Assert.DoesNotContain("<script>", style);
+    }
+
+    [Fact]
+    public void AHostileLowResPathCannotCloseThePictureStyleAttribute()
+    {
+        var h = new RenderHarness(
+            previewType: PreviewType.LowResImage,
+            lowResPath: "data:image/gif;base64,AAA\" onerror=\"alert(1)");
+
+        var html = h.SrcSetManager.CreatePictureElement(h.CreateImage(), "defaultset", imageAlt: "a")!.ToString();
+
+        Assert.DoesNotContain("onerror=\"alert", html);
     }
 
     // ---- nonce validation ---------------------------------------------------------------------------
@@ -221,6 +300,42 @@ public class AuditFixTests
         Assert.Null(h.SrcSetManager.GetSrcSet(image, "no-such-rule-set"));
         Assert.Null(h.SrcSetManager.GetBreakPointsCss(image, "no-such-rule-set"));
         Assert.Null(h.SrcSetManager.GetSizes(image, null));
+    }
+
+    [Fact]
+    public void TheUnknownRuleSetWarningIsLoggedOncePerNegativeCacheWindowNotPerCall()
+    {
+        // Logging on the way out of LoadRuleSet repeated the warning for every cache hit on the negative
+        // entry - fifty images sharing one typo'd rule set meant fifty identical warnings per request.
+        var logger = new CountingLogger<SrcSetManager>();
+        var h = new RenderHarness(srcSetLogger: logger);
+        var image = h.CreateImage();
+
+        for (int i = 0; i < 10; i++)
+        {
+            Assert.Null(h.SrcSetManager.CreateMarkup(image, "no-such-rule-set", alt: "a"));
+        }
+
+        Assert.Equal(1, logger.Warnings);
+    }
+
+    private sealed class CountingLogger<T> : Microsoft.Extensions.Logging.ILogger<T>
+    {
+        public int Warnings;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) { Interlocked.Increment(ref Warnings); }
+        }
     }
 
     [Fact]
