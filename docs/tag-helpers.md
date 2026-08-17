@@ -30,6 +30,62 @@ Renders a `<picture>` element with one responsive `<source>` per breakpoint. Whe
 
 Both `<ds:picture>` and `<ds:img>` accept `above-fold`, `preload`, `nonce` and `attr-*`.
 
+---
+
+## ds:img
+
+Renders a single `<img>` with `srcset` and `sizes` — the browser picks a candidate itself, no per-breakpoint media queries. Use `<ds:picture>` instead when you need art direction (different crops per breakpoint).
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `image` | `MediaWithCrops` | Yes | The Umbraco media item. |
+| `rule-set` | string | Yes | Name of the rule set from `appsettings.json`. |
+| `image-alt` | string | Yes | Alt text. A warning is shown if omitted (unless suppressed). |
+| `image-title` | string | No | `title` attribute for the `<img>`. |
+| `image-class` | string | No | CSS class for the `<img>`. |
+| `srcset-attr-name` | string | No | Renames the `srcset` attribute (e.g. for a JS library expecting `data-srcset`). Must be a plain attribute name (letters, digits, dashes); anything else falls back to `srcset`. |
+| `wrapper-element` / `wrapper-class` | string | No | As for `<ds:picture>`. |
+| `image-attributes` / `attr-*` | dictionary | No | Extra attributes for the `<img>`. |
+| `nonce` | string | No | CSP nonce — same behavior as `<ds:picture>`. |
+| `above-fold` / `preload` | bool | No | As for `<ds:picture>`. |
+
+```cshtml
+<ds:img image="@Model.Image"
+        rule-set="thumbnail"
+        image-alt="Product photo"
+        image-class="img-fluid" />
+```
+
+Notes:
+- `<ds:img>` has no `query-string` attribute; per-URL options are a `<ds:picture>`/`<ds:background>` feature. The global `UseWebP` setting applies to `<ds:img>` URLs like everywhere else.
+- SVGs render as a plain `<img>` with the bare media URL, exactly like `<ds:picture>`.
+
+---
+
+## ds:background
+
+Renders an element (default `<div>`) with a responsive CSS background image: a `<style>` block with one `background-image` rule per breakpoint, plus 2x/3x variants when configured, with the editor's focal point converted to `background-position`. Inner content between the tags is preserved.
+
+### Attributes
+
+| Attribute | Type | Required | Description |
+|---|---|---|---|
+| `image` | `MediaWithCrops` | Yes | The Umbraco media item. |
+| `rule-set` | string | Yes | Name of the rule set from `appsettings.json`. |
+| `element` | string | No | The HTML element to render and apply the background class to. Defaults to `div`. |
+| `query-string` | string | No | Extra query string parameters appended to every generated image URL. |
+| `nonce` | string | No | CSP nonce value for the emitted `<style>` block. |
+
+```cshtml
+<ds:background image="@Model.HeroImage" rule-set="hero" element="section">
+    <h1>Content over the background</h1>
+</ds:background>
+```
+
+SVGs get a single rule with the bare media URL — there is nothing to crop.
+
 ### Above-the-fold images
 
 Set `above-fold="true"` on the hero — usually the page's Largest Contentful Paint element. The image is then loaded eagerly at high priority and skips the placeholder, instead of being deferred like images further down the page:
@@ -193,9 +249,10 @@ Leave it out (or `false`) in `appsettings.Development.json` and set it to `true`
 | Condition | Behavior |
 |---|---|
 | `image` is null | Output is suppressed entirely (nothing rendered). An error is logged. |
-| `image-alt` is empty | A warning div is rendered (unless `SuppressTagHelperWarnings` is true). |
-| `rule-set` is empty | A warning div is rendered (unless `SuppressTagHelperWarnings` is true). |
-| Exception during rendering | A warning div is rendered with the error message (unless `SuppressTagHelperWarnings` is true). |
+| `image-alt` is empty | A warning div is rendered (unless `SuppressTagHelperWarnings` is true); the image still renders after it. |
+| `rule-set` is empty | A warning div is rendered (unless suppressed) and rendering stops. |
+| `rule-set` matches no configured rule set | Nothing is rendered; a warning naming the rule set is logged. |
+| Exception during rendering | A generic warning div is rendered (unless suppressed); the actual exception is logged, not shown to visitors. |
 
 ### Important Notes
 
@@ -262,4 +319,6 @@ Content-Security-Policy: style-src 'nonce-abc123'; script-src 'nonce-abc123';
 
 When lazy loading is disabled or no LQIP preview type is configured, the `nonce` has no effect (there is nothing inline to protect). The `<ds:img>` tag helper supports the same `nonce` attribute for the single-`<img>` variant.
 
-> **Deprecated:** `<ds:picture-csp>` is now an obsolete alias of `<ds:picture>` and behaves identically to `<ds:picture nonce="…">`. Prefer `<ds:picture>` with a `nonce`; the `-csp` element will be removed in a future version.
+> **Deprecated:** `<ds:picture-csp>` is now an obsolete alias of `<ds:picture>`. Note it is only CSP-safe when you pass a `nonce` — **without one it renders inline `style`/`onload` like a plain `<ds:picture>`**, which a strict CSP blocks. If you migrated markup that used `<ds:picture-csp>` without a nonce attribute, add one. Prefer `<ds:picture>` with a `nonce`; the `-csp` element will be removed in a future version.
+
+The nonce value must be plain base64/base64url (which is what CSP middlewares issue). Anything else is rejected and the render proceeds as if no nonce was supplied — a value that would need HTML-escaping is not a usable nonce.

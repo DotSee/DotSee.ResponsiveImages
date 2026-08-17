@@ -138,16 +138,25 @@ namespace DotSee.ResponsiveImages.TagHelpers
 
                 if (!string.IsNullOrWhiteSpace(WrapperClass))
                 {
+                    if (string.IsNullOrWhiteSpace(WrapperElement))
+                    {
+                        // With no wrapper element the attribute has nothing to sit on and is discarded.
+                        logger.LogDebug("ds:picture has wrapper-class '{WrapperClass}' but no wrapper-element; the class is ignored.", WrapperClass);
+                    }
                     output.Attributes.Add("class", WrapperClass);
                 }
 
                 if (string.IsNullOrWhiteSpace(RuleSet))
                 {
+                    // Without a rule set nothing downstream can render; stop here rather than fall
+                    // through into an exception that would replace this message with its own.
                     Error(output, Constants.PicElErrorRuleSetError, SuppressWarnings);
+                    return;
                 }
 
                 var useCsp = !string.IsNullOrWhiteSpace(Nonce);
-                var imageAttributes = ImageAttributes;
+                // image-attributes="@someNullDictionary" binds null over the initialised default.
+                var imageAttributes = ImageAttributes ?? new Dictionary<string, string>();
 
                 // Registered for the layout's <ds:preloads> to emit in <head>, which is early enough to
                 // matter; a hint written here beside the image would be discovered no sooner than the
@@ -162,7 +171,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
                 var csp = useCsp ? srcSet.GetCspLqip(Image, RuleSet, Nonce, AboveFold) : CspLqip.Inactive;
                 if (csp.Active)
                 {
-                    imageAttributes = new Dictionary<string, string>(ImageAttributes) { [SrcSetManager.DsIdAttributeName] = csp.DsId };
+                    imageAttributes = new Dictionary<string, string>(imageAttributes) { [SrcSetManager.DsIdAttributeName] = csp.DsId };
                     output.Content.AppendHtml(csp.StyleBlock);
                 }
 
@@ -182,7 +191,8 @@ namespace DotSee.ResponsiveImages.TagHelpers
             }
             catch (Exception e)
             {
-                Error(output, e.Message, SuppressWarnings);
+                logger.LogError(e, "ds:picture failed to render. Image: {ImageId}, RuleSet: {RuleSet}", Image?.Id, RuleSet);
+                Error(output, Constants.RenderError, SuppressWarnings);
             }
         }
 
@@ -192,7 +202,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
             output.TagName = "div";
             output.AddClass("container", HtmlEncoder.Default);
             output.AddClass("row", HtmlEncoder.Default);
-            output.Attributes.Add("style", "color: red;");
+            output.Attributes.SetAttribute("style", "color: red;");
             output.Content.SetContent(errorMessage);
         }
     }

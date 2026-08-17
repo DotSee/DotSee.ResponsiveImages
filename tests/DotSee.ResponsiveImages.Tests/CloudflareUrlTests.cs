@@ -412,8 +412,11 @@ public class CloudflareUrlTests
 
         Assert.Contains("min-resolution: 1.25dppx", css);
         Assert.Contains("min-resolution: 2.25dppx", css);
-        Assert.Contains("/cdn-cgi/image/width=2400,", css);   // 1200 at 2x
-        Assert.Contains("/cdn-cgi/image/width=3600,", css);   // 1200 at 3x
+        // 1200 at 2x/3x would be 2400/3600, but OriginalImageMaxWidth (1920) is a source ceiling:
+        // requesting above it only asks the processor to upscale, so DPI variants clamp to it.
+        Assert.Contains("/cdn-cgi/image/width=1920,", css);
+        Assert.DoesNotContain("width=2400", css);
+        Assert.DoesNotContain("width=3600", css);
         Assert.DoesNotContain(UmbracoStyleUrl, css);
     }
 
@@ -424,7 +427,8 @@ public class CloudflareUrlTests
         var css = harness.SrcSetManager
             .GetBreakPointsCss(harness.CreateImage(focalLeft: 0.3m, focalTop: 0.8m), "defaultset")!.ToString();
 
-        Assert.Contains("width=2400,fit=cover,gravity=0.3x0.8", css);
+        // 1200 at 2x, clamped to the rule set's 1920 ceiling.
+        Assert.Contains("width=1920,fit=cover,gravity=0.3x0.8", css);
     }
 
     [Fact]

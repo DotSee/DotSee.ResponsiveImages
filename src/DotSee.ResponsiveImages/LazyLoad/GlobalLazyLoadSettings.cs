@@ -16,7 +16,9 @@ namespace DotSee.ResponsiveImages.LazyLoad
         {
             if (this.EnablelazyLoad != null)
             {
-               return ruleSet.LazyLoad == null?  this.EnablelazyLoad.Value:ruleSet.LazyLoad.Value;
+               // ruleSet is null-tolerated (an unknown rule-set name resolves to null); a missing rule
+               // set inherits the global value rather than throwing.
+               return ruleSet?.LazyLoad == null ? this.EnablelazyLoad.Value : ruleSet.LazyLoad.Value;
             }
             return false;
         }

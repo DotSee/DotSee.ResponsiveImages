@@ -49,7 +49,10 @@ namespace DotSee.ResponsiveImages
                             ? b.Width
                             : b.BreakPointWidth;
 
-                //Respect original image max dimensions
+                //Respect original image max dimensions. The width is deliberately NOT recomputed after
+                //a height clamp: with a cropping mode the processor delivers exactly the clamped WxH
+                //that is requested, so the declared box matches the delivered image — and recomputing
+                //from the rule-set maximums' ratio could ENLARGE the width beyond what was asked for.
                 if (maxWidth > 0 && width > maxWidth) { width = maxWidth; }
                 if (maxHeight > 0 && height > maxHeight) { height = maxHeight; }
 
@@ -132,7 +135,11 @@ namespace DotSee.ResponsiveImages
                 ordered.Add(new RuleBreakPoint
                 {
                     BreakPointWidth = 1,
-                    Width = smallest.Width,
+                    // The RESOLVED width, not the raw one: a smallest breakpoint that relies on
+                    // UseBreakPointWidthIfNoWidth has Width 0, and copying that verbatim resolves the
+                    // synthetic entry against its own BreakPointWidth of 1 - a one-pixel image for
+                    // every viewport below the smallest configured breakpoint.
+                    Width = Helpers.GetBreakPointWidth(smallest, ruleSet),
                     Height = smallest.Height
                 });
             }
@@ -152,22 +159,32 @@ namespace DotSee.ResponsiveImages
         //Pixel width generated for this breakpoint at the given DPI factor.
         private static int ScaledWidth(RuleSet ruleSet, RuleBreakPoint bp, int factor)
         {
-            if (bp.Width <= 0) { return 0; }
+            // GetBreakPointWidth resolves a breakpoint with no explicit Width the same way the other
+            // renderers do (UseBreakPointWidthIfNoWidth, or derived from the height). Returning 0 for
+            // those - as this method once did - made every <source> ask for the uncropped original.
+            int width = Helpers.GetBreakPointWidth(bp, ruleSet);
+            if (width <= 0) { return 0; }
 
-            return (ruleSet.OriginalImageMaxWidth != null && bp.DefinedImageWidth > (int)ruleSet.OriginalImageMaxWidth)
-                ? (int)ruleSet.OriginalImageMaxWidth * factor
-                : bp.DefinedImageWidth * factor;
+            int scaled = width * factor;
+
+            // The DPI candidates are clamped too: OriginalImageMaxWidth is the source ceiling, and a 2x
+            // request above it only asks the processor (or a per-transformation-billed CDN) to upscale.
+            // A candidate clamped down onto the 1x width is dropped by the caller's duplicate check.
+            int maxWidth = ruleSet.OriginalImageMaxWidth ?? 0;
+            return (maxWidth > 0 && scaled > maxWidth) ? maxWidth : scaled;
         }
 
-        // If height is present make sure that we don't exceed maximum width or height if present.
-        // Calculate the new height or use the original one in case calculation returns 0 which means that
-        // either max constraints have not been set or some other issue allows us to use original height.
+        // An explicit breakpoint height is a deliberate crop; honour it (scaled and clamped) instead of
+        // substituting the aspect ratio of the rule-set maximums, which is a property of the source
+        // image rather than of this breakpoint's crop. Width-only breakpoints keep height 0 (no height
+        // constraint), matching the srcset ladder and the background renderer.
         private static int ScaledHeight(RuleSet ruleSet, int breakPointHeight, int scaledWidth, int factor)
         {
             if (breakPointHeight <= 0) { return 0; }
 
-            var calculated = Helpers.CalcHeight(ruleSet, scaledWidth);
-            return calculated > 0 ? calculated : breakPointHeight * factor;
+            int scaled = breakPointHeight * factor;
+            int maxHeight = ruleSet.OriginalImageMaxHeight ?? 0;
+            return (maxHeight > 0 && scaled > maxHeight) ? maxHeight : scaled;
         }
     }
 }

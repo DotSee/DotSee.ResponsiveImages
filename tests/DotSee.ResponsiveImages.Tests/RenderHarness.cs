@@ -52,7 +52,8 @@ public sealed class RenderHarness
         RuleSet? ruleSet = null,
         ILqipService? lqipService = null,
         bool suppressTagHelperWarnings = false,
-        IResponsiveImageUrlProvider? urlProviderOverride = null)
+        IResponsiveImageUrlProvider? urlProviderOverride = null,
+        Microsoft.Extensions.Logging.ILogger<SrcSetManager>? srcSetLogger = null)
     {
         ImageUrl = imageUrl;
         RuleSet = ruleSet ?? DefaultRuleSet();
@@ -117,7 +118,7 @@ public sealed class RenderHarness
 
         SrcSetManager = new SrcSetManager(
             ruleProvider, imageUrlGenerator.Object, urlProvider.Object, imageUrlService,
-            cssRenderer, pictureRenderer, bgManager, Lazy, cache, config, lqipService);
+            cssRenderer, pictureRenderer, bgManager, Lazy, cache, config, lqipService, srcSetLogger);
     }
 
     private static string BuildUrl(ImageUrlGenerationOptions o)

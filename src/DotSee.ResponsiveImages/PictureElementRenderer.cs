@@ -48,8 +48,9 @@ namespace DotSee.ResponsiveImages
         /// </param>
         public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true, bool aboveFold = false)
         {
-            string imageFiletype = Path.GetExtension(originalImage.Url());
-            if (imageFiletype == ".svg")
+            if (originalImage == null) { return null; }
+
+            if (Helpers.IsSvg(originalImage))
             {
                 StringBuilder _sb = new StringBuilder(string.Empty);
                 _sb.Append("<img");
@@ -58,7 +59,9 @@ namespace DotSee.ResponsiveImages
                 {
                     _sb.Append(Helpers.CreateAttribute("alt", imageAlt));
                 }
-                if (imageClass != null)
+                // Same non-whitespace condition as the emission and the filter below - the parameter
+                // defaults to "", which is not a class.
+                if (!string.IsNullOrWhiteSpace(imageClass))
                 {
                     _sb.Append(Helpers.CreateAttribute("class", imageClass));
                 }
@@ -69,7 +72,7 @@ namespace DotSee.ResponsiveImages
                                                         !(
                                                         (imageAlt != null && x.Key.InvariantEquals("alt"))
                                                         ||
-                                                        (imageClass != null && x.Key.InvariantEquals("class")))
+                                                        (!string.IsNullOrWhiteSpace(imageClass) && x.Key.InvariantEquals("class")))
                                                         )
                                                     .Select(x => Helpers.CreateAttribute(x.Key, x.Value))));
                 }
@@ -79,7 +82,12 @@ namespace DotSee.ResponsiveImages
 
             var ruleSet = _cacheService.GetCachedItem(
                 Helpers.GetRulesetCacheKey(ruleSetName),
-                () => _ruleProvider.LoadRule(ruleSetName));
+                () => _ruleProvider.LoadRule(ruleSetName),
+                nullResultTimeout: TimeSpan.FromMinutes(2));
+
+            // Unknown rule-set name: emit nothing rather than the NullReferenceException this used to
+            // be. SrcSetManager logs the miss; SVGs above never needed the rule set and still render.
+            if (ruleSet == null) { return null; }
 
             var isLazyLoad = !aboveFold && _lazyLoadSettings.IsLazyLoadEnabled(ruleSet);
 
@@ -128,12 +136,15 @@ namespace DotSee.ResponsiveImages
             }
             if (imageAttributes != null)
             {
+                // Drop a dictionary "class" only when a class attribute was actually rendered - the
+                // imageClass parameter defaults to "", and filtering on != null used to silently
+                // discard a caller's attr-class even though no class had been emitted at all.
                 sb.Append(string.Join(" ", imageAttributes
                                                 .Where(x =>
                                                     !(
                                                     (imageAlt != null && x.Key.InvariantEquals("alt"))
                                                     ||
-                                                    (imageClass != null && x.Key.InvariantEquals("class")))
+                                                    (!string.IsNullOrWhiteSpace(imageClass) && x.Key.InvariantEquals("class")))
                                                     )
                                                 .Select(x => Helpers.CreateAttribute(x.Key, x.Value))));
             }
@@ -214,8 +225,8 @@ namespace DotSee.ResponsiveImages
         {
             if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
             {
-                var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
-                    () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet));
+                var lqipSource = Helpers.SanitizeCssUrl(Lqip.BlurSource(_lqipService, originalImage,
+                    () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet)));
 
                 sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s\"");
                 sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
@@ -223,7 +234,7 @@ namespace DotSee.ResponsiveImages
             else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
                 && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
             {
-                sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
+                sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{Helpers.SanitizeCssUrl(_lazyLoadSettings.LowResImagePath)}')\"");
                 sb.Append(" onload=\"this.style.backgroundImage='none'\"");
             }
         }

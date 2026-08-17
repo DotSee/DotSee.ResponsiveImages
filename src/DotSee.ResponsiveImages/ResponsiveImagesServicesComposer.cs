@@ -52,8 +52,12 @@ public class ResponsiveImagesServicesComposer : IComposer
             builder.Services.AddSingleton<IResponsiveImageUrlProvider, UmbracoImageUrlProvider>();
         }
 
-        builder.Services.AddMemoryCache();
-        builder.Services.AddSingleton<ICacheService, CacheService>();
+        // The cache service gets its own private MemoryCache rather than the application-wide one:
+        // sharing the host's instance means a host-configured SizeLimit makes every size-less entry
+        // throw, and this package's keys would sit alongside every other component's.
+        builder.Services.AddSingleton<ICacheService>(
+            _ => new CacheService(new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
         builder.Services.AddSingleton<ILqipService, LqipService>();
         builder.Services.AddScoped<IPreloadCollector, PreloadCollector>();
 
@@ -61,7 +65,11 @@ public class ResponsiveImagesServicesComposer : IComposer
         // real implementation when the section explicitly enables it - installing the package must never
         // start making outbound calls to someone's CDN.
         builder.Services.Configure<ImageCdnSettings>(builder.Config.GetSection("DotSee:ImageCdn"));
-        builder.Services.AddHttpClient(CloudflareCdnPurgeService.HttpClientName);
+        // A short timeout: purging currently happens synchronously inside the media-save notification,
+        // so the HttpClient default of 100 seconds per batch would let an unreachable CDN hang an
+        // editor's save for minutes.
+        builder.Services.AddHttpClient(CloudflareCdnPurgeService.HttpClientName,
+            client => client.Timeout = System.TimeSpan.FromSeconds(10));
         builder.Services.AddTransient<CdnPurgeUrlBuilder>();
 
         var cdnSettings = new ImageCdnSettings();
@@ -73,6 +81,9 @@ public class ResponsiveImagesServicesComposer : IComposer
         }
         else
         {
+            // NullCdnPurgeService logs when a purge is attempted while the section says Enabled — an
+            // unrecognised Provider value or a config change after startup would otherwise be
+            // indistinguishable from purging deliberately switched off.
             builder.Services.AddSingleton<ICdnPurgeService, NullCdnPurgeService>();
         }
 
@@ -82,5 +93,12 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.AddNotificationHandler<ContentDeletedNotification, ResponsiveImagesCacheInvalidator>();
         builder.AddNotificationHandler<MediaSavedNotification, ResponsiveImagesCacheInvalidator>();
         builder.AddNotificationHandler<MediaDeletedNotification, ResponsiveImagesCacheInvalidator>();
+        // The backoffice "delete" moves media to the recycle bin; MediaDeletedNotification only fires
+        // when the bin is emptied.
+        builder.AddNotificationHandler<MediaMovedToRecycleBinNotification, ResponsiveImagesCacheInvalidator>();
+        // Cache refreshers are the notifications that reach every node in a load-balanced setup; the
+        // service-level ones above fire only where the operation happened.
+        builder.AddNotificationHandler<ContentCacheRefresherNotification, ResponsiveImagesCacheInvalidator>();
+        builder.AddNotificationHandler<MediaCacheRefresherNotification, ResponsiveImagesCacheInvalidator>();
     }
 }

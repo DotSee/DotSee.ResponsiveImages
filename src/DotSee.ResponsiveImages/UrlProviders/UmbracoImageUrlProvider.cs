@@ -36,7 +36,10 @@ namespace DotSee.ResponsiveImages.UrlProviders
                 _imageUrlGenerator, null, _publishedUrlProvider
                 , width: width > 0 ? (int?)width : null
                 , height: height > 0 ? (int?)height : null
-                , quality: ruleSet.ImageQuality
+                // Omitted rather than passed as an explicit 0 — "quality=0" is not a meaningful request,
+                // and GetCropUrlForPath below already omitted it, so render and purge URLs disagreed for
+                // any rule set that leaves ImageQuality unset.
+                , quality: ruleSet.ImageQuality > 0 ? (int?)ruleSet.ImageQuality : null
                 , imageCropMode: ruleSet.CropMode
                 , preferFocalPoint: ruleSet.UseFocalPoint
                 , furtherOptions: furtherOptions);
