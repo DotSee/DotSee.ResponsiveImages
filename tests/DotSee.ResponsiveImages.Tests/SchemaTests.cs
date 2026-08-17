@@ -7,6 +7,7 @@ using System.Text.Json;
 using DotSee.ResponsiveImages.Cdn;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
+using DotSee.ResponsiveImages.UrlProviders;
 using Umbraco.Cms.Core.Models;
 using Xunit;
 
@@ -51,6 +52,7 @@ public class SchemaTests
     [InlineData(typeof(RuleBreakPoint), "RuleBreakPoint")]
     [InlineData(typeof(GlobalLazyLoadSettings), "LazyLoadSettings")]
     [InlineData(typeof(ImageCdnSettings), "ImageCdnSettings")]
+    [InlineData(typeof(CloudflareImageSettings), "CloudflareImageSettings")]
     public void EverySettableSettingIsDescribedBySchema(Type settingsType, string definition)
     {
         var documented = PropertyNamesOf(definition).ToHashSet(StringComparer.Ordinal);
@@ -65,6 +67,7 @@ public class SchemaTests
     [InlineData(typeof(RuleBreakPoint), "RuleBreakPoint")]
     [InlineData(typeof(GlobalLazyLoadSettings), "LazyLoadSettings")]
     [InlineData(typeof(ImageCdnSettings), "ImageCdnSettings")]
+    [InlineData(typeof(CloudflareImageSettings), "CloudflareImageSettings")]
     public void SchemaDescribesNoSettingThatDoesNotExist(Type settingsType, string definition)
     {
         var bindable = BindablePropertiesOf(settingsType).ToHashSet(StringComparer.Ordinal);

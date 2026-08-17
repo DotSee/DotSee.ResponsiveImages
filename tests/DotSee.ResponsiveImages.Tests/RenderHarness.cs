@@ -4,6 +4,7 @@ using System.Linq;
 using DotSee.ResponsiveImages.Caching;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
+using DotSee.ResponsiveImages.UrlProviders;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,7 +51,8 @@ public sealed class RenderHarness
         string lowResPath = "/img/lowres.jpg",
         RuleSet? ruleSet = null,
         ILqipService? lqipService = null,
-        bool suppressTagHelperWarnings = false)
+        bool suppressTagHelperWarnings = false,
+        IResponsiveImageUrlProvider? urlProviderOverride = null)
     {
         ImageUrl = imageUrl;
         RuleSet = ruleSet ?? DefaultRuleSet();
@@ -91,7 +93,7 @@ public sealed class RenderHarness
         UrlProvider = urlProvider.Object;
         ConfigSource = new ConfigSource(Options.Create(new List<RuleSet> { RuleSet }));
         var ruleProvider = new ConfigFileJsonRuleProvider(NullLogger<ConfigFileJsonRuleProvider>.Instance, ConfigSource);
-        var imageUrlService = new ImageUrlService(imageUrlGenerator.Object, urlProvider.Object);
+        var imageUrlService = new ImageUrlService(imageUrlGenerator.Object, urlProvider.Object, urlProviderOverride);
         var cssRenderer = new CssRenderer(imageUrlService, imageUrlGenerator.Object, urlProvider.Object);
         Lazy = new GlobalLazyLoadSettings
         {
@@ -154,11 +156,13 @@ public sealed class RenderHarness
     }
 
     public MediaWithCrops CreateImage(Guid? key = null, int id = 1234, decimal? focalLeft = null, decimal? focalTop = null,
-        int? intrinsicWidth = null, int? intrinsicHeight = null)
+        int? intrinsicWidth = null, int? intrinsicHeight = null, DateTime? updateDate = null)
     {
         var content = new Mock<IPublishedContent>();
         content.SetupGet(x => x.Key).Returns(key ?? Guid.Parse("11111111-1111-1111-1111-111111111111"));
         content.SetupGet(x => x.Id).Returns(id);
+        // Left at default (DateTime.MinValue) unless a test asks for one, which reads as "no cache buster".
+        if (updateDate.HasValue) { content.SetupGet(x => x.UpdateDate).Returns(updateDate.Value); }
         content.SetupGet(x => x.Name).Returns(ImageUrl); // URL providers echo this back (see harness ctor)
 
         // umbracoWidth/umbracoHeight are how the renderer derives the aspect ratio for width/height attributes.

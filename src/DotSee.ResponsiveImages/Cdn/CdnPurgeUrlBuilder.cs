@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using Umbraco.Cms.Core.Media;
+using DotSee.ResponsiveImages.UrlProviders;
 using Umbraco.Cms.Core.Models;
 
 namespace DotSee.ResponsiveImages.Cdn
@@ -20,12 +20,17 @@ namespace DotSee.ResponsiveImages.Cdn
     /// </remarks>
     public class CdnPurgeUrlBuilder
     {
-        private readonly IImageUrlGenerator _imageUrlGenerator;
+        private readonly IResponsiveImageUrlProvider _urlProvider;
         private readonly IConfigSource _configSource;
 
-        public CdnPurgeUrlBuilder(IImageUrlGenerator imageUrlGenerator, IConfigSource configSource)
+        /// <param name="urlProvider">
+        /// The same provider the renderers use, so the URLs submitted for purging are in whatever format
+        /// the site actually rendered — purging Umbraco crop URLs on a site emitting Cloudflare ones would
+        /// match nothing at the edge and fail silently.
+        /// </param>
+        public CdnPurgeUrlBuilder(IResponsiveImageUrlProvider urlProvider, IConfigSource configSource)
         {
-            _imageUrlGenerator = imageUrlGenerator;
+            _urlProvider = urlProvider;
             _configSource = configSource;
         }
 
@@ -54,13 +59,7 @@ namespace DotSee.ResponsiveImages.Cdn
                 {
                     if (width <= 0) { continue; }
 
-                    var url = _imageUrlGenerator.GetImageUrl(new ImageUrlGenerationOptions(mediaPath)
-                    {
-                        Width = width,
-                        Height = height > 0 ? height : null,
-                        Quality = ruleSet.ImageQuality > 0 ? ruleSet.ImageQuality : null,
-                        ImageCropMode = ruleSet.CropMode
-                    });
+                    var url = _urlProvider.GetCropUrlForPath(mediaPath, ruleSet, width, height);
 
                     if (!string.IsNullOrWhiteSpace(url)) { relativeUrls.Add(url); }
                 }

@@ -86,7 +86,9 @@ namespace DotSee.ResponsiveImages
             string mediaQueryImage2x = null;
 
             int width2x = (imageModel.RuleSet.OriginalImageMaxWidth != null && b.DefinedImageWidth > (int)imageModel.RuleSet.OriginalImageMaxWidth) ? (int)imageModel.RuleSet.OriginalImageMaxWidth * 2 : b.DefinedImageWidth * 2;
-            mediaQueryImage2x = _imageUrlService.GetAltImageOrDefault(imageModel.OriginalImage, Helpers.GetBreakPointWidth(b, imageModel.RuleSet), null).GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width2x, quality: imageModel.RuleSet.ImageQuality, imageCropMode: imageModel.RuleSet.CropMode);
+            mediaQueryImage2x = _imageUrlService.GetCropUrl(
+                _imageUrlService.GetAltImageOrDefault(imageModel.OriginalImage, Helpers.GetBreakPointWidth(b, imageModel.RuleSet), null)
+                , imageModel.RuleSet, width2x, 0, imageModel.QueryString);
 
             sb.Append("@media ");
             sb.Append("only screen and (-webkit-min-device-pixel-ratio: 5/4)");
@@ -124,7 +126,9 @@ namespace DotSee.ResponsiveImages
             string mediaQueryImage3x = null;
 
             int width3x = (imageModel.RuleSet.OriginalImageMaxWidth != null && b.DefinedImageWidth > (int)imageModel.RuleSet.OriginalImageMaxWidth) ? (int)imageModel.RuleSet.OriginalImageMaxWidth * 3 : b.DefinedImageWidth * 3;
-            mediaQueryImage3x = _imageUrlService.GetAltImageOrDefault(imageModel.OriginalImage, Helpers.GetBreakPointWidth(b, imageModel.RuleSet), null).GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: width3x, quality: imageModel.RuleSet.ImageQuality, imageCropMode: imageModel.RuleSet.CropMode);
+            mediaQueryImage3x = _imageUrlService.GetCropUrl(
+                _imageUrlService.GetAltImageOrDefault(imageModel.OriginalImage, Helpers.GetBreakPointWidth(b, imageModel.RuleSet), null)
+                , imageModel.RuleSet, width3x, 0, imageModel.QueryString);
 
             sb.Append("@media ");
             sb.Append("only screen and (-webkit-min-device-pixel-ratio: 2.25)");

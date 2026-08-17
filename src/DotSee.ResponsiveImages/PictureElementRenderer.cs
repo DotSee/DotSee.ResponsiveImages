@@ -215,7 +215,7 @@ namespace DotSee.ResponsiveImages
             if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
             {
                 var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
-                    () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20));
+                    () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet));
 
                 sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s\"");
                 sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");

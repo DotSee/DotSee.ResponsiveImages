@@ -37,6 +37,7 @@ namespace DotSee.ResponsiveImages
                 () => _ruleProvider.LoadRule(ruleSetName));
             imageModel.RuleSet = ruleSet;
             imageModel.LowResImagePath = _lazyLoadSettings.LowResImagePath;
+            imageModel.QueryString = optionalQueryStringParameters;
             imageModel.CacheKey = CacheLiteralsRS.CachedImageCss + originalImage.Id + ruleSet.Name;
             imageModel.ImageGuid = Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString());
             imageModel.OriginalImageId = originalImage.Id;

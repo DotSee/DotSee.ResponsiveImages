@@ -235,7 +235,7 @@ namespace DotSee.ResponsiveImages
                 if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
                 {
                     var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
-                        () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode));
+                        () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet));
                     sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s\"");
                     sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
                 }
@@ -331,7 +331,7 @@ namespace DotSee.ResponsiveImages
             if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
             {
                 var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
-                    () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode));
+                    () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet));
                 var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s}}</style>";
                 var script = $"<script nonce=\"{nonce}\">document.querySelector('{selector}').addEventListener('load',function(){{this.style.filter='none';this.style.backgroundImage='none'}});</script>";
                 return new CspLqip(uniqueId, new HtmlString(style), new HtmlString(script));

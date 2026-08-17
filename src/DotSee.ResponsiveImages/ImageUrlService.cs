@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using DotSee.ResponsiveImages.Models;
+using DotSee.ResponsiveImages.UrlProviders;
 using Umbraco.Cms.Core.Media;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Routing;
@@ -9,20 +10,28 @@ namespace DotSee.ResponsiveImages
 {
     /// <summary>
     /// Central point for generating crop URLs. Every URL the package emits goes through
-    /// <see cref="GetCropUrl"/>, so rule-set concerns that must never be forgotten — quality, crop mode
-    /// and the editor's focal point — are applied in exactly one place.
+    /// <see cref="GetCropUrl"/> or <see cref="GetPlaceholderUrl"/>, so rule-set concerns that must never be
+    /// forgotten — quality, crop mode and the editor's focal point — are applied in exactly one place.
     /// </summary>
+    /// <remarks>
+    /// The URL <em>format</em> is decided by the injected <see cref="IResponsiveImageUrlProvider"/>: Umbraco
+    /// crop query strings by default, Cloudflare <c>/cdn-cgi/image/…</c> URLs when configured. This class
+    /// owns which sizes are asked for; the provider owns who resizes.
+    /// </remarks>
     public class ImageUrlService
     {
-        private readonly IImageUrlGenerator _imageUrlGenerator;
-        private readonly IPublishedUrlProvider _publishedUrlProvider;
+        private readonly IResponsiveImageUrlProvider _urlProvider;
 
+        /// <param name="urlProvider">
+        /// Optional so the service stays constructible from just the two Umbraco boundary services. When
+        /// null it falls back to <see cref="UmbracoImageUrlProvider"/>, i.e. the original behaviour.
+        /// </param>
         public ImageUrlService(
               IImageUrlGenerator imageUrlGenerator
-            , IPublishedUrlProvider publishedUrlProvider)
+            , IPublishedUrlProvider publishedUrlProvider
+            , IResponsiveImageUrlProvider urlProvider = null)
         {
-            _imageUrlGenerator = imageUrlGenerator;
-            _publishedUrlProvider = publishedUrlProvider;
+            _urlProvider = urlProvider ?? new UmbracoImageUrlProvider(imageUrlGenerator, publishedUrlProvider);
         }
 
         public MediaWithCrops GetAltImageOrDefault(MediaWithCrops originalImage, int width, Dictionary<int, MediaWithCrops> altImages)
@@ -53,14 +62,18 @@ namespace DotSee.ResponsiveImages
         {
             if (image == null) { return null; }
 
-            return image.GetCropUrl(
-                _imageUrlGenerator, null, _publishedUrlProvider
-                , width: width > 0 ? (int?)width : null
-                , height: height > 0 ? (int?)height : null
-                , quality: ruleSet.ImageQuality
-                , imageCropMode: ruleSet.CropMode
-                , preferFocalPoint: ruleSet.UseFocalPoint
-                , furtherOptions: queryString);
+            return _urlProvider.GetCropUrl(image, ruleSet, width, height, queryString);
+        }
+
+        /// <summary>
+        /// A tiny, low-quality URL placeholder for the image — the fallback the LQIP previews use when the
+        /// inline base64 placeholder cannot be built from the media file.
+        /// </summary>
+        public string GetPlaceholderUrl(MediaWithCrops image, RuleSet ruleSet)
+        {
+            if (image == null) { return null; }
+
+            return _urlProvider.GetPlaceholderUrl(image, ruleSet);
         }
 
         public string GetAltImageUrlOrDefault(MediaWithCrops originalImage, RuleSet ruleSet, int width, int height, string queryString = null)

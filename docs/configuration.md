@@ -32,6 +32,8 @@ All configuration lives in `appsettings.json` under `DotSee:ResponsiveImages`.
 | `RuleSets` | Array of rule sets. See [Rule Sets](#rule-sets). |
 | `LazyLoad` | Global lazy-loading settings. See [Lazy Loading Settings](#lazy-loading-settings). |
 | `UseWebP` | Append `&format=webp` to every generated URL. See [WebP Support](#webp-support). |
+| `UrlProvider` | Which backend generates image URLs — Umbraco or Cloudflare. See [Cloudflare image transformations](#cloudflare-image-transformations). |
+| `Cloudflare` | Options for the Cloudflare URL provider. Only read when `UrlProvider` is `Cloudflare`. |
 | `SuppressTagHelperWarnings` | Stop the tag helpers rendering warnings into the page. See [Tag Helper Warnings](#tag-helper-warnings). |
 
 CDN purging lives in a sibling section, `DotSee:ImageCdn` — see [CDN Purging](#cdn-purging). It is kept separate because it configures your CDN rather than image markup.
@@ -229,6 +231,80 @@ When enabled, `&format=webp` is appended to all generated image URLs. This requi
 > This setting used to be a `useWebP` key at the root of `appsettings.json`. That still works; the nested setting wins if both are present. See [Upgrading from the earlier layout](#upgrading-from-the-earlier-layout).
 
 > If your site sits behind a CDN that already negotiates image formats (Cloudflare Polish, `format=auto`, and similar), leave `UseWebP` off and let the CDN choose. Format negotiation is the one thing such a CDN does better than this package; picking the right *pixel dimensions* for the layout, and the right crop, is what it cannot do for you.
+
+## Cloudflare image transformations
+
+By default the package generates image-processor query strings (`?width=400&height=400&quality=70`) that your **origin** resolves. If the site sits behind a Cloudflare zone with transformations enabled, one setting moves that work to the edge:
+
+```json
+{
+  "DotSee": {
+    "ResponsiveImages": {
+      "UrlProvider": "Cloudflare"
+    }
+  }
+}
+```
+
+Every URL the package emits then becomes a Cloudflare transformation URL:
+
+```
+/cdn-cgi/image/width=400,height=400,fit=cover,gravity=0.3x0.8,quality=70,format=auto,onerror=redirect/media/gmgjipfc/friendly-chair.jpg?v=1dcc0464fe1e69e
+```
+
+**Nothing else changes.** Rule sets, breakpoints, `<picture>` art direction, `srcset`/`sizes`, the focal point, lazy loading, LQIP, responsive CSS backgrounds, preload hints and caching all behave exactly as documented above. The division of labour is the point: this package decides *how many pixels* to send and writes the markup — neither of which a CDN can do, because only the page knows what the CSS layout box is. Cloudflare produces the pixels and spares your origin the CPU.
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `UrlProvider` | string | `"Umbraco"` | `Umbraco` or `Cloudflare`. |
+| `Cloudflare.Prefix` | string | `"/cdn-cgi/image"` | Path prefix Cloudflare listens on. Change only for a Worker route. |
+| `Cloudflare.BaseUrl` | string | null | Absolute origin to prefix URLs with, e.g. `https://images.example.com`. Leave unset for relative URLs — correct when the site itself is the zone doing the transforming. |
+| `Cloudflare.Format` | string | `"auto"` | Cloudflare `format`. `auto` serves AVIF/WebP by content negotiation. `none` keeps the source format. |
+| `Cloudflare.Metadata` | string | null | Cloudflare `metadata`: `none`, `copyright` or `keep`. Unset leaves Cloudflare's own behaviour (keep the copyright tag, drop the rest) and keeps the option out of the URL. |
+| `Cloudflare.CacheBuster` | bool | true | Append the media item's cache buster to the source URL, as Umbraco's own crop URLs do. |
+| `Cloudflare.OnError` | string | `"redirect"` | Cloudflare `onerror`. `redirect` serves the untransformed original if a transformation fails, so an unsupported source degrades to a working image. |
+
+### Focal point
+
+`UseFocalPoint` (on by default) becomes Cloudflare's `gravity` option, so the crop is still anchored on the point the editor chose in the backoffice. This is the setting worth caring about most: `gravity=auto` and Polish can only guess where the subject of a photo is, whereas the focal point is CMS data.
+
+`gravity` is emitted only when the crop mode actually crops — Cloudflare ignores it otherwise, and a dead option would only fragment the edge cache.
+
+### Crop mode mapping
+
+`CropMode` maps onto Cloudflare's `fit`:
+
+| `CropMode` | Cloudflare `fit` | |
+|---|---|---|
+| `Crop` | `cover` | exact |
+| `Max` | `scale-down` | exact |
+| `Pad`, `BoxPad` | `pad` | exact |
+| `Min` | `cover` | **approximation** — Cloudflare has no shortest-side-constrained mode |
+| `Stretch` | `cover` | **approximation** — Cloudflare has no distort mode |
+
+The two approximations are the only places Cloudflare mode is not a faithful translation of what the origin would have produced. If you rely on `Min` or `Stretch`, check the result before switching.
+
+### WebP
+
+Leave `UseWebP` off and let `format=auto` do it — Cloudflare will serve AVIF where the browser supports it, which WebP does not reach. If `UseWebP` is on it still wins, emitting `format=webp` instead of `format=auto`, so existing configuration keeps meaning what it says.
+
+### Query strings
+
+Options the package owns — `width`, `height`, `mode`, `rxy` — are ignored if you pass them through a tag helper's `query-string`, since the rule set and candidate ladder decide those. `format` and `quality` are translated into their Cloudflare equivalents. Anything else is appended to the *source* URL, where it reaches your origin unchanged.
+
+### Things to know
+
+- **Transformations must be enabled on the zone.** Until they are, `/cdn-cgi/image/` URLs will not resolve. They also do not resolve on `localhost`, so local testing shows you the markup, not the delivered image.
+- **SVGs are untouched.** They bypass transformation entirely and render as a plain `<img>`, as they already did.
+- **LQIP still costs nothing.** The blur placeholder is built by decoding the media file on the server and inlining it as a `data:` URI — no request, and no billable transformation. Only its fallback, for a file that cannot be decoded, is a URL.
+- **This setting needs the current configuration layout.** Under the [earlier layout](#upgrading-from-the-earlier-layout) `DotSee:ResponsiveImages` *is* the rule set array and cannot carry a named key. Nest your rule sets under `RuleSets` first; everything else about the old layout keeps working.
+- **Switching provider needs a restart** — it is resolved once at startup, like `DotSee:ImageCdn`.
+- **Only URLs this package generates change.** If your own views call Umbraco's `GetCropUrl()` directly — a page-header background, an author thumbnail — those keep producing origin query strings. Move them to a rule set and a tag helper to bring them along.
+- **Cloudflare bills per unique transformation.** Every breakpoint × DPI factor × media edit is a variant. Fewer, wider-spaced breakpoints cost less than many closely-spaced ones, and `Use3x` roughly doubles the count for a difference almost nobody can see.
+
+### With CDN purging
+
+If you also use [CDN purging](#cdn-purging), purge URLs are generated by the same provider, so they are in the same format as the URLs your pages actually requested. As documented there, `Files` mode remains best effort — a media-save event cannot know the cache buster or focal point a page used.
 
 ## Tag Helper Warnings
 

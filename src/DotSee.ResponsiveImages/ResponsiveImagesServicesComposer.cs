@@ -3,6 +3,7 @@ using DotSee.ResponsiveImages.Cdn;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using DotSee.ResponsiveImages.Preloading;
+using DotSee.ResponsiveImages.UrlProviders;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Generic;
@@ -34,6 +35,23 @@ public class ResponsiveImagesServicesComposer : IComposer
         builder.Services.AddTransient<CssRenderer>();
         builder.Services.AddTransient<ImageUrlService>();
         builder.Services.AddTransient<PictureElementRenderer>();
+
+        // Which backend builds image URLs. Bound unconditionally so the settings are always readable, with
+        // the provider itself chosen at compose time - so, as with the CDN purge service, switching
+        // provider needs a restart rather than taking effect on a config reload mid-request.
+        builder.Services.Configure<CloudflareImageSettings>(
+            ResponsiveImagesConfiguration.GetCloudflareSection(builder.Config));
+
+        if (ResponsiveImagesConfiguration.GetUrlProvider(builder.Config)
+                .InvariantEquals(ResponsiveImagesConfiguration.CloudflareUrlProvider))
+        {
+            builder.Services.AddSingleton<IResponsiveImageUrlProvider, CloudflareImageUrlProvider>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IResponsiveImageUrlProvider, UmbracoImageUrlProvider>();
+        }
+
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<ICacheService, CacheService>();
         builder.Services.AddSingleton<ILqipService, LqipService>();
