@@ -91,7 +91,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
                 IHtmlContent nonceAttribute = string.IsNullOrWhiteSpace(Nonce) ? null : new HtmlString(Nonce);
 
                 var css = srcSet.GetBreakPointsCss(Image, RuleSet, QueryString, nonceAttribute);
-                var className = srcSet.GetClassName(Image, RuleSet);
+                var className = srcSet.GetClassName(Image, RuleSet, QueryString);
 
                 if (!string.IsNullOrEmpty(className))
                 {
@@ -108,7 +108,8 @@ namespace DotSee.ResponsiveImages.TagHelpers
             }
             catch (Exception e)
             {
-                Error(output, e.Message, SuppressWarnings);
+                logger.LogError(e, "ds:background failed to render. Image: {ImageId}, RuleSet: {RuleSet}", Image?.Id, RuleSet);
+                Error(output, Constants.RenderError, SuppressWarnings);
             }
         }
 
@@ -118,7 +119,7 @@ namespace DotSee.ResponsiveImages.TagHelpers
             output.TagName = "div";
             output.AddClass("container", HtmlEncoder.Default);
             output.AddClass("row", HtmlEncoder.Default);
-            output.Attributes.Add("style", "color: red;");
+            output.Attributes.SetAttribute("style", "color: red;");
             output.Content.SetContent(errorMessage);
         }
     }

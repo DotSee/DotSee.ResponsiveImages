@@ -210,11 +210,15 @@ namespace DotSee.ResponsiveImages.UrlProviders
 
             url = url.Trim();
 
-            // An absolute source is passed through verbatim; a site-relative one loses its leading slash,
-            // since it already follows one in the composed path.
-            return url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
-                ? url
-                : url.TrimStart('/');
+            // Absolute and protocol-relative sources are passed through verbatim — an external media
+            // file system (blob storage behind a CDN) emits both forms, and trimming the "//" off a
+            // protocol-relative URL would silently turn it into a broken local path. Only a
+            // site-relative source loses its leading slash, since it already follows one in the
+            // composed path.
+            if (url.StartsWith("//", StringComparison.Ordinal)) { return url; }
+            if (Uri.TryCreate(url, UriKind.Absolute, out var absolute) && !absolute.IsFile) { return url; }
+
+            return url.TrimStart('/');
         }
 
         /// <summary>
@@ -293,12 +297,37 @@ namespace DotSee.ResponsiveImages.UrlProviders
             if (value > 0) { options.Add(name + "=" + value.ToString(CultureInfo.InvariantCulture)); }
         }
 
+        /// <summary>The formats Cloudflare accepts, plus "none" meaning "keep the source format".</summary>
+        private static readonly HashSet<string> KnownFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "auto", "avif", "webp", "jpeg", "baseline-jpeg", "json", "none"
+        };
+
+        /// <summary>The keyword quality values Cloudflare accepts alongside 1-100.</summary>
+        private static readonly HashSet<string> KnownQualityKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "high", "medium-high", "medium-low", "low"
+        };
+
         private static void AddQuality(List<string> options, RuleSet ruleSet, string qualityOverride)
         {
+            // The override arrives via the per-call query string, so it is validated rather than
+            // trusted: interpolated into the URL path, a "quality" of "1,fit=pad" or "1/.." would
+            // inject an extra Cloudflare option or rewrite the source path.
             if (!string.IsNullOrWhiteSpace(qualityOverride))
             {
-                options.Add("quality=" + qualityOverride.Trim());
-                return;
+                var candidate = qualityOverride.Trim();
+                if (int.TryParse(candidate, NumberStyles.None, CultureInfo.InvariantCulture, out int parsed) && parsed >= 1 && parsed <= 100)
+                {
+                    options.Add("quality=" + parsed.ToString(CultureInfo.InvariantCulture));
+                    return;
+                }
+                if (KnownQualityKeywords.Contains(candidate))
+                {
+                    options.Add("quality=" + candidate.ToLowerInvariant());
+                    return;
+                }
+                // Unrecognised override: fall through to the rule set's own quality.
             }
 
             if (ruleSet.ImageQuality > 0)
@@ -309,27 +338,38 @@ namespace DotSee.ResponsiveImages.UrlProviders
 
         /// <summary>
         /// A per-call <c>format</c> (which is how <c>UseWebP</c> reaches here) wins over the configured
-        /// default, so a site that explicitly asked for WebP still gets it.
+        /// default, so a site that explicitly asked for WebP still gets it. Both values are validated
+        /// against Cloudflare's own format list — they end up in the URL path, where a stray comma or
+        /// slash would change the request's meaning.
         /// </summary>
         private void AddFormat(List<string> options, string formatOverride)
         {
-            string format = !string.IsNullOrWhiteSpace(formatOverride) ? formatOverride : Settings.Format;
+            // A present-but-empty per-call format ("format=") means "omit the option", matching what an
+            // empty configured Format does — only an absent override falls back to the configured value.
+            string format = formatOverride != null ? formatOverride.Trim() : Settings.Format?.Trim();
+
+            if (string.IsNullOrEmpty(format) || !KnownFormats.Contains(format)) { return; }
 
             // "none" is not a Cloudflare format, so it reads as "leave the source format alone".
-            if (format != null && format.Trim().InvariantEquals("none")) { return; }
+            if (format.InvariantEquals("none")) { return; }
 
-            AddSetting(options, "format", format);
+            options.Add("format=" + format.ToLowerInvariant());
         }
 
         /// <summary>
         /// Adds a configured option, omitting it when the setting is blank. Note <c>metadata=none</c> is a
-        /// real Cloudflare value (strip EXIF), not an instruction to omit the option.
+        /// real Cloudflare value (strip EXIF), not an instruction to omit the option. Values containing
+        /// the option-list separators are dropped: a comma or slash inside a value would splice extra
+        /// options into the URL path.
         /// </summary>
         private static void AddSetting(List<string> options, string name, string value)
         {
             if (string.IsNullOrWhiteSpace(value)) { return; }
 
-            options.Add(name + "=" + value.Trim());
+            value = value.Trim();
+            if (value.IndexOfAny(new[] { ',', '/', '=', ' ' }) >= 0) { return; }
+
+            options.Add(name + "=" + value);
         }
 
         /// <summary>

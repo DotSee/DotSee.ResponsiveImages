@@ -171,7 +171,7 @@ public HtmlString GetBreakPointsCss(
 | `originalImage` | `MediaWithCrops` | The Umbraco media item. |
 | `ruleSetName` | string | Name of the rule set from config. |
 | `optionalQueryStringParameters` | string | Extra query parameters for image URLs. |
-| `nonceAttribute` | `IHtmlContent` | CSP nonce attribute for the `<style>` tag (e.g., `nonce="abc123"`). |
+| `nonceAttribute` | `IHtmlContent` | The CSP nonce **value** for the `<style>` tag (e.g. `new HtmlString("abc123")`). Values that are not plain base64/base64url are rejected and the style renders without a nonce. |
 
 ### Example
 
@@ -193,10 +193,10 @@ The method generates a `<style>` block containing media queries with `background
 
 ### Content Security Policy (CSP)
 
-If your site uses a Content Security Policy, pass a nonce attribute:
+If your site uses a Content Security Policy, pass the nonce value:
 
 ```cshtml
-@_srcSetManager.GetBreakPointsCss(Model.Image, "hero", nonceAttribute: Html.Raw("nonce=\"abc123\""))
+@_srcSetManager.GetBreakPointsCss(Model.Image, "hero", nonceAttribute: new HtmlString("abc123"))
 ```
 
 ---
@@ -206,10 +206,12 @@ If your site uses a Content Security Policy, pass a nonce attribute:
 Returns the CSS class name generated for a background image. Use this together with `GetBreakPointsCss` to link the CSS rules to your HTML element.
 
 ```csharp
-public string GetClassName(IPublishedContent originalImage, string ruleSetName)
+public string GetClassName(IPublishedContent originalImage, string ruleSetName, string optionalQueryStringParameters = null)
 ```
 
-Returns a string like `media-image-RSFor_hero_a1b2c3d4`.
+Returns a string like `media-image-RSFor_hero_<the media item's GUID as 32 hex characters>`, with a short hash suffix when a query string or focal point applies.
+
+> Pass the **same** `optionalQueryStringParameters` you gave `GetBreakPointsCss` — the query string is part of the generated class name, so the two calls must agree for the class to match its CSS block. Don't hardcode generated class names in stylesheets; they are derived values and can change between versions.
 
 ---
 
@@ -246,11 +248,8 @@ public HtmlString GetSizes(MediaWithCrops originalImage, RuleSet ruleSet)
 
 ## Null Safety
 
-All methods return `null` if `originalImage` is null. Always check for null if the image is optional:
+All methods return `null` for a null `originalImage`, and for a rule-set name that matches nothing in configuration (a warning naming the rule set is logged). Razor renders a null `HtmlString` as nothing, so a missing optional image simply emits no markup:
 
 ```cshtml
-@if (Model.Image != null)
-{
-    @_srcSetManager.CreatePictureElement(Model.Image, "default", imageAlt: "My image")
-}
+@_srcSetManager.CreatePictureElement(Model.Image, "default", imageAlt: "My image")
 ```

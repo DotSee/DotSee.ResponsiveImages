@@ -25,7 +25,10 @@ public class ResponsiveImagesCacheInvalidator :
     INotificationHandler<ContentUnpublishedNotification>,
     INotificationHandler<ContentDeletedNotification>,
     INotificationHandler<MediaSavedNotification>,
-    INotificationHandler<MediaDeletedNotification>
+    INotificationHandler<MediaDeletedNotification>,
+    INotificationHandler<MediaMovedToRecycleBinNotification>,
+    INotificationHandler<ContentCacheRefresherNotification>,
+    INotificationHandler<MediaCacheRefresherNotification>
 {
     private readonly ICacheService _cacheService;
     private readonly ICdnPurgeService _cdnPurgeService;
@@ -56,7 +59,15 @@ public class ResponsiveImagesCacheInvalidator :
     public void Handle(MediaSavedNotification notification)
     {
         _cacheService.Clear();
-        Purge(notification.SavedEntities, _cdnSettings.CurrentValue.PurgeOnMediaSave);
+
+        // Only saves that actually changed the file warrant a purge: a rename or caption edit leaves
+        // the cached edge objects exactly as valid as before, and purge requests are rate limited
+        // (and on some plans metered), so spending them on no-ops starves the saves that matter.
+        var withChangedFiles = notification.SavedEntities
+            .Where(x => x.WasPropertyDirty(Umbraco.Cms.Core.Constants.Conventions.Media.File))
+            .ToList();
+
+        Purge(withChangedFiles, _cdnSettings.CurrentValue.PurgeOnMediaSave);
     }
 
     public void Handle(MediaDeletedNotification notification)
@@ -64,6 +75,24 @@ public class ResponsiveImagesCacheInvalidator :
         _cacheService.Clear();
         Purge(notification.DeletedEntities, _cdnSettings.CurrentValue.PurgeOnMediaDelete);
     }
+
+    public void Handle(MediaMovedToRecycleBinNotification notification)
+    {
+        // This is what the backoffice "delete" actually raises — MediaDeletedNotification only fires
+        // when the recycle bin is emptied, so the ordinary delete flow used to leave both the local
+        // cache and the edge serving the recycled file.
+        _cacheService.Clear();
+        Purge(notification.MoveInfoCollection.Select(x => x.Entity), _cdnSettings.CurrentValue.PurgeOnMediaDelete);
+    }
+
+    // The service-level notifications above fire only on the node that performed the operation. In a
+    // load-balanced setup the other nodes learn about the change through cache-refresher instructions,
+    // so these two are what keep a subscriber node's rendered-markup cache from serving stale images
+    // forever (the entries are sliding, so steady traffic alone never expires them). Clear() is
+    // idempotent, so double-firing on a single-node site costs nothing.
+    public void Handle(ContentCacheRefresherNotification notification) => _cacheService.Clear();
+
+    public void Handle(MediaCacheRefresherNotification notification) => _cacheService.Clear();
 
     private void Purge(IEnumerable<IMedia> media, bool enabledForThisEvent)
     {
@@ -86,12 +115,23 @@ public class ResponsiveImagesCacheInvalidator :
             return;
         }
 
+        // The cap is per media item, applied inside Build. Applying it a second time to the flattened
+        // list meant the first item of a bulk save consumed the whole budget and the rest were silently
+        // dropped; the purge service's own 30-URLs-per-request chunking bounds the total anyway.
+        var maxUrlsPerItem = settings.MaxUrlsPerPurge;
+        if (maxUrlsPerItem <= 0)
+        {
+            _logger.LogWarning(
+                "DotSee:ImageCdn:MaxUrlsPerPurge is {Value}; treating it as unlimited. Set a positive value to cap URLs per media item.",
+                maxUrlsPerItem);
+            maxUrlsPerItem = int.MaxValue;
+        }
+
         var urls = media
             .Select(CdnPurgeUrlBuilder.GetMediaPath)
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .SelectMany(path => _purgeUrlBuilder.Build(path, settings.BaseUrl, settings.MaxUrlsPerPurge))
+            .SelectMany(path => _purgeUrlBuilder.Build(path, settings.BaseUrl, maxUrlsPerItem))
             .Distinct()
-            .Take(settings.MaxUrlsPerPurge)
             .ToList();
 
         if (urls.Count == 0) { return; }

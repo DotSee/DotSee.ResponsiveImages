@@ -1,26 +1,40 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
-		<Version>17.01</Version>
+		<Version>17.1.0</Version>
+		<!-- Annotations only (no new warnings): the existing ? annotations become real nullable metadata
+		     for consumers instead of CS8632 warnings for us. -->
+		<Nullable>annotations</Nullable>
 	</PropertyGroup>
+
+	<PropertyGroup>
+		<!-- Package metadata. Without these the nuspec ships author "DotSee.ResponsiveImages" and the
+		     literal description "Package Description". -->
+		<Authors>Sotiris Filippidis</Authors>
+		<Company>DotSee Web Services</Company>
+		<Description>Responsive images for Umbraco CMS: picture elements, img srcset/sizes, responsive CSS background images, native lazy loading with LQIP placeholders, focal-point-aware crops, and optional Cloudflare image transformation URLs. No runtime JavaScript dependency.</Description>
+		<PackageTags>umbraco;umbraco-cms;responsive-images;srcset;picture;lazy-loading;lqip;cloudflare</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages</RepositoryUrl>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<!-- The XML doc comments are extensive but deliberately partial: they explain the non-obvious,
+		     not every parameter. Missing-comment warnings would drown the build output. -->
+		<NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+	</PropertyGroup>
+
 	<PropertyGroup>
 		<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
-		<DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
 		<IncludeBuildOutput>true</IncludeBuildOutput>
 		<EnableDefaultContentItems>false</EnableDefaultContentItems>
+		<RazorCompileOnBuild>false</RazorCompileOnBuild>
+		<OutputType>Library</OutputType>
+		<IsPackable>true</IsPackable>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Include="App_Plugins\DotSee.ResponsiveImages\**\*.*" PackagePath="content\DotSee.ResponsiveImages">
-			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-			<Pack>true</Pack>
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-		</None>
-		<None Include="Views\**\*.*" PackagePath="content\DotSee.ResponsiveImages.Views">
-			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-			<Pack>true</Pack>
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-		</None>
+		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
 		<!-- JSON schema for appsettings IntelliSense. Copied to the consumer's project root by the
 		     targets file below, where their appsettings-schema.json can $ref it. -->
 		<None Include="schema\appsettings-schema.DotSee.ResponsiveImages.json" PackagePath="content\DotSee.ResponsiveImages.Schema">
@@ -28,40 +42,22 @@
 			<Pack>true</Pack>
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</None>
+		<!-- buildTransitive is imported for direct AND transitive references; packing the same file to
+		     build/ as well would run its targets twice for direct consumers. -->
 		<None Include="build\DotSee.ResponsiveImages.targets" PackagePath="buildTransitive">
 			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 			<Pack>true</Pack>
 			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</None>
-		<None Include="build\DotSee.ResponsiveImages.targets" PackagePath="build">
-			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-			<Pack>true</Pack>
-			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
-		</None>
-
 	</ItemGroup>
-  <ItemGroup>
-    <Content Update="App_Plugins\DotSee.ResponsiveImages\Sample.json">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Umbraco.Cms.Core" Version="17.1.0" />
-    <PackageReference Include="Umbraco.Cms.Web.Common" Version="17.1.0" />
-    <!-- Used only to decode/downscale media into inline base64 LQIP placeholders.
-         Same version Umbraco.Cms.Imaging.ImageSharp 17.1.0 resolves, so no extra download for consumers. -->
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
-  </ItemGroup>
-  <!-- Themelion.Core project reference removed - dependencies being inlined -->
 
-
-
-  <!--Set this to true ModelsBuilder mode is not PureLive -->
-  <PropertyGroup>
-    <RazorCompileOnBuild>false</RazorCompileOnBuild>
-    <ApplicationIcon />
-    <OutputType>Library</OutputType>
-    <StartupObject />
-	  <IsPackable>true</IsPackable>
-  </PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Umbraco.Cms.Core" Version="17.1.0" />
+		<PackageReference Include="Umbraco.Cms.Web.Common" Version="17.1.0" />
+		<!-- Used only to decode/downscale media into inline base64 LQIP placeholders.
+		     Same version Umbraco.Cms.Imaging.ImageSharp 17.1.0 resolves, so no extra download for
+		     consumers. Upper bound: a 4.x pulled in by another package would change the APIs LQIP calls
+		     and fail silently (the failure path only logs at Debug). -->
+		<PackageReference Include="SixLabors.ImageSharp" Version="[3.1.12,4.0)" />
+	</ItemGroup>
 </Project>

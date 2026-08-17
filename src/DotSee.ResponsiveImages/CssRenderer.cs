@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using DotSee.ResponsiveImages.Models;
 using Microsoft.AspNetCore.Html;
 using Umbraco.Cms.Core.Media;
 using Umbraco.Cms.Core.Routing;
@@ -30,10 +31,13 @@ namespace DotSee.ResponsiveImages
         {
             if (imageModel.IsSvg)
             {
+                // An SVG scales itself; a single rule with the bare URL is all the background needs.
+                // (This branch used to request a hard-coded 450x450 crop of the vector — and was dead
+                // anyway, since IsSvg was never assigned.)
                 StringBuilder sbSvg = new StringBuilder(string.Empty);
                 sbSvg.Append("<style type=\"text/css\">\r\n");
-                var aa = imageModel.OriginalImage.GetCropUrl(450, 450);
-                sbSvg.Append("\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('{aa}');\r\n }}");
+                var svgUrl = Helpers.SanitizeCssUrl(imageModel.OriginalImage.Url());
+                sbSvg.Append("\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('{svgUrl}');\r\n }}");
                 sbSvg.Append("</style>");
                 return (new HtmlString(sbSvg.ToString()));
             }
@@ -41,10 +45,10 @@ namespace DotSee.ResponsiveImages
             StringBuilder sb = new StringBuilder(string.Empty);
             sb.Append("<style type=\"text/css\">\r\n");
 
-            var imageQuery = ".media-image-{0}{1} {{background-image:url('{2}');}}\r\n";
-
             //First append a dummy element without media query - required for some browsers to work.
-            sb.Append(string.Format(imageQuery, imageModel.ImageGuid, string.Empty, string.Empty));
+            //background-image:none, NOT url(''): an empty url() resolves against the document base URL,
+            //so every page carrying a background image would fetch its own HTML a second time as an image.
+            sb.Append(".media-image-" + imageModel.ImageGuid + " {background-image:none;}\r\n");
 
             //Get all breakpoints, create from larger to smaller pixel ratio.
             foreach (var b in imageModel.BreakPoints)
@@ -57,7 +61,7 @@ namespace DotSee.ResponsiveImages
 
                 sb.Append(currNextBreakPointQueries);
 
-                sb.Append(" {\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('" + b.ImageUrl + "');\r\n ");
+                sb.Append(" {\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('" + Helpers.SanitizeCssUrl(b.ImageUrl) + "');\r\n ");
 
                 sb.Append(GetClosingElements(imageModel.ImageTop, imageModel.ImageLeft));
 
@@ -85,7 +89,7 @@ namespace DotSee.ResponsiveImages
 
             string mediaQueryImage2x = null;
 
-            int width2x = (imageModel.RuleSet.OriginalImageMaxWidth != null && b.DefinedImageWidth > (int)imageModel.RuleSet.OriginalImageMaxWidth) ? (int)imageModel.RuleSet.OriginalImageMaxWidth * 2 : b.DefinedImageWidth * 2;
+            int width2x = DpiWidth(imageModel.RuleSet, b, 2);
             mediaQueryImage2x = _imageUrlService.GetCropUrl(
                 _imageUrlService.GetAltImageOrDefault(imageModel.OriginalImage, Helpers.GetBreakPointWidth(b, imageModel.RuleSet), null)
                 , imageModel.RuleSet, width2x, 0, imageModel.QueryString);
@@ -110,7 +114,7 @@ namespace DotSee.ResponsiveImages
             sb.Append("\r\nonly screen and (min-resolution: 1.25dppx)");
             sb.Append(currNextBreakPointQueries);
 
-            sb.Append(" {\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('" + mediaQueryImage2x + "'); ");
+            sb.Append(" {\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('" + Helpers.SanitizeCssUrl(mediaQueryImage2x) + "'); ");
 
             sb.Append(GetClosingElements(imageModel.ImageTop, imageModel.ImageLeft));
 
@@ -125,7 +129,7 @@ namespace DotSee.ResponsiveImages
 
             string mediaQueryImage3x = null;
 
-            int width3x = (imageModel.RuleSet.OriginalImageMaxWidth != null && b.DefinedImageWidth > (int)imageModel.RuleSet.OriginalImageMaxWidth) ? (int)imageModel.RuleSet.OriginalImageMaxWidth * 3 : b.DefinedImageWidth * 3;
+            int width3x = DpiWidth(imageModel.RuleSet, b, 3);
             mediaQueryImage3x = _imageUrlService.GetCropUrl(
                 _imageUrlService.GetAltImageOrDefault(imageModel.OriginalImage, Helpers.GetBreakPointWidth(b, imageModel.RuleSet), null)
                 , imageModel.RuleSet, width3x, 0, imageModel.QueryString);
@@ -150,11 +154,24 @@ namespace DotSee.ResponsiveImages
             sb.Append("\r\nonly screen and (min-resolution: 2.25dppx)");
             sb.Append(currNextBreakPointQueries);
 
-            sb.Append(" {\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('" + mediaQueryImage3x + "'); ");
+            sb.Append(" {\r\n.media-image-" + imageModel.ImageGuid + $" {{\r\nbackground-image:url('" + Helpers.SanitizeCssUrl(mediaQueryImage3x) + "'); ");
 
             sb.Append(GetClosingElements(imageModel.ImageTop, imageModel.ImageLeft));
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Width for a DPI variant of this breakpoint: the same resolved 1x width the breakpoint's own
+        /// URL uses, multiplied and clamped to <see cref="RuleSet.OriginalImageMaxWidth"/>. The ceiling
+        /// applies to the multiplied value — asking for twice the source ceiling only asks the image
+        /// processor to upscale.
+        /// </summary>
+        private static int DpiWidth(RuleSet ruleSet, RuleBreakPoint b, int factor)
+        {
+            int scaled = Helpers.GetBreakPointWidth(b, ruleSet) * factor;
+            int maxWidth = ruleSet.OriginalImageMaxWidth ?? 0;
+            return (maxWidth > 0 && scaled > maxWidth) ? maxWidth : scaled;
         }
 
         private string GetClosingElements(double imageTop, double imageLeft)

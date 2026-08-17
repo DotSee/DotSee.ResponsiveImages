@@ -97,8 +97,8 @@ Rule sets are defined as a JSON array under `DotSee:ResponsiveImages:RuleSets`. 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `Name` | string | *required* | Unique identifier. Referenced in views as `rule-set="hero"`. |
-| `ImageQuality` | int | 0 | JPEG/WebP quality (1-100). |
-| `CropMode` | string | `"Min"` | Umbraco `ImageCropMode`: `Crop`, `Max`, `Stretch`, `Pad`, `BoxPad`, `Min`. |
+| `ImageQuality` | int | 0 | JPEG/WebP quality (1-100). When unset, no quality option is added to generated URLs and the image processor's default applies. |
+| `CropMode` | string | `"Crop"` | Umbraco `ImageCropMode`: `Crop`, `Max`, `Stretch`, `Pad`, `BoxPad`, `Min`. Defaults to `Crop` when unset. |
 | `OriginalImageMaxWidth` | int? | null | Maximum width constraint. Images won't be generated wider than this. |
 | `OriginalImageMaxHeight` | int? | null | Maximum height constraint. Used for proportional calculations. |
 | `Use2x` | bool | false | Generate a 2x (retina) variant. In `<picture>` it is an extra `2x` candidate on the same `<source>`; in `<img srcset>` it is an extra, wider `w` candidate. |
@@ -361,12 +361,16 @@ Optional. When an editor replaces an image, a CDN will keep serving the previous
 | `ZoneId` | string | null | Cloudflare zone id for the zone serving the site. Purging is skipped if missing. |
 | `ApiToken` | string | null | Token with the *Zone → Cache Purge* permission. Purging is skipped if missing. |
 | `BaseUrl` | string | null | Public origin, e.g. `https://www.example.com`. Required for `Files` mode, which needs absolute URLs. A warning is logged and the purge skipped if missing. |
-| `PurgeOnMediaSave` | bool | true | Purge when a media item is saved. Still gated by `Enabled`. |
-| `PurgeOnMediaDelete` | bool | true | Purge when a media item is deleted. Still gated by `Enabled`. |
+| `PurgeOnMediaSave` | bool | true | Purge when a media item's **file** changes on save. Renames and caption edits do not purge — the cached edge objects are still valid, and purge requests are rate limited. Still gated by `Enabled`. |
+| `PurgeOnMediaDelete` | bool | true | Purge when a media item is deleted — including moving it to the recycle bin, which is what the backoffice delete button actually does. Still gated by `Enabled`. |
 | `Mode` | string | `"Files"` | `Files` purges the changed media's URLs; `Everything` purges the whole zone. |
-| `MaxUrlsPerPurge` | int | 100 | Upper bound on URLs submitted per media change, so a rule set with many breakpoints can't produce an unbounded request. |
+| `MaxUrlsPerPurge` | int | 100 | Upper bound on URLs submitted **per media item**, so a rule set with many breakpoints can't produce an unbounded request. A non-positive value is treated as unlimited, with a warning. |
 
 > **Keep `ApiToken` out of `appsettings.json`.** Use user secrets in development and an environment variable (`DotSee__ImageCdn__ApiToken`) in production.
+
+> **Enabling purging requires a restart.** The purge service is selected once at startup (like [`UrlProvider`](#cloudflare-image-transformations)); flipping `Enabled` to `true` on a running site logs a warning at the next media save instead of purging. Disabling takes effect immediately.
+
+> **External media (blob storage) cannot be purged through the zone.** Purge URLs whose host differs from `BaseUrl` are skipped and logged — Cloudflare rejects a purge batch containing another host's URLs outright, so one such URL would otherwise take every legitimate one down with it.
 
 ### Modes
 

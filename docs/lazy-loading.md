@@ -109,7 +109,7 @@ Generates a tiny (20px wide) WebP version of the actual image, inlines it as a b
 
 **Pros:** Each placeholder matches the actual image content, costs no HTTP request, and paints as soon as the HTML does. No additional assets to manage, and one less image variant for a per-transformation-billed CDN to generate.
 
-**Cons:** A few hundred bytes of markup per image. The placeholder is built by decoding the source media with ImageSharp on first use and is cached; if the media file cannot be read or decoded the package falls back to the previous behaviour — a `?width=40&quality=20` URL placeholder, which does cost a request.
+**Cons:** A few hundred bytes of markup per image. The inline placeholder is a **20px-wide** WebP built by decoding the source media with ImageSharp on first use, then cached; if the media file cannot be read or decoded (the failure is remembered briefly, then retried) the package falls back to a **40px** `?width=40&quality=20` URL placeholder, which does cost a request. Sources declaring more than 100 megapixels are not decoded at all — a tiny file can claim enormous dimensions, and decoding happens on the request thread — and fall back to the URL placeholder likewise.
 
 ### LowResImage
 
