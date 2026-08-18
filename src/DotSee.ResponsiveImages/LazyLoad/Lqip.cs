@@ -7,7 +7,7 @@ namespace DotSee.ResponsiveImages.LazyLoad
     {
         /// <summary>
         /// Resolves what a blur placeholder should point at: an inline base64 data URI when one can be
-        /// built (no extra request, paints with the HTML), otherwise the supplied URL placeholder.
+        /// built  (no extra request, paints with the HTML), otherwise the supplied URL placeholder.
         /// </summary>
         public static string BlurSource(ILqipService lqipService, MediaWithCrops image, Func<string> urlFallback)
         {
