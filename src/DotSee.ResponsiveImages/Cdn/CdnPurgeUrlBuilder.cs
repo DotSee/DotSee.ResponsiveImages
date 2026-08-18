@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using Umbraco.Cms.Core.Media;
+using DotSee.ResponsiveImages.UrlProviders;
+using Microsoft.Extensions.Logging;
 using Umbraco.Cms.Core.Models;
 
 namespace DotSee.ResponsiveImages.Cdn
@@ -20,13 +21,21 @@ namespace DotSee.ResponsiveImages.Cdn
     /// </remarks>
     public class CdnPurgeUrlBuilder
     {
-        private readonly IImageUrlGenerator _imageUrlGenerator;
+        private readonly IResponsiveImageUrlProvider _urlProvider;
         private readonly IConfigSource _configSource;
+        private readonly ILogger<CdnPurgeUrlBuilder> _logger;
 
-        public CdnPurgeUrlBuilder(IImageUrlGenerator imageUrlGenerator, IConfigSource configSource)
+        /// <param name="urlProvider">
+        /// The same provider the renderers use, so the URLs submitted for purging are in whatever format
+        /// the site actually rendered — purging Umbraco crop URLs on a site emitting Cloudflare ones would
+        /// match nothing at the edge and fail silently.
+        /// </param>
+        public CdnPurgeUrlBuilder(IResponsiveImageUrlProvider urlProvider, IConfigSource configSource,
+            ILogger<CdnPurgeUrlBuilder> logger = null)
         {
-            _imageUrlGenerator = imageUrlGenerator;
+            _urlProvider = urlProvider;
             _configSource = configSource;
+            _logger = logger;
         }
 
         /// <summary>
@@ -54,13 +63,7 @@ namespace DotSee.ResponsiveImages.Cdn
                 {
                     if (width <= 0) { continue; }
 
-                    var url = _imageUrlGenerator.GetImageUrl(new ImageUrlGenerationOptions(mediaPath)
-                    {
-                        Width = width,
-                        Height = height > 0 ? height : null,
-                        Quality = ruleSet.ImageQuality > 0 ? ruleSet.ImageQuality : null,
-                        ImageCropMode = ruleSet.CropMode
-                    });
+                    var url = _urlProvider.GetCropUrlForPath(mediaPath, ruleSet, width, height);
 
                     if (!string.IsNullOrWhiteSpace(url)) { relativeUrls.Add(url); }
                 }
@@ -70,6 +73,18 @@ namespace DotSee.ResponsiveImages.Cdn
             {
                 if (Uri.TryCreate(origin, relative, out var absolute))
                 {
+                    // Uri.TryCreate ignores the base when the second argument is itself absolute (or
+                    // protocol-relative), which is exactly what an external media file system produces.
+                    // A Cloudflare zone rejects a purge batch containing another host's URLs outright,
+                    // so one blob-storage URL would take every legitimate URL down with it.
+                    if (!string.Equals(absolute.Host, origin.Host, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger?.LogDebug(
+                            "Skipping purge URL {Url}: its host does not match DotSee:ImageCdn:BaseUrl ({BaseHost}). External media cannot be purged through this zone.",
+                            absolute, origin.Host);
+                        continue;
+                    }
+
                     results.Add(absolute.ToString());
                 }
             }

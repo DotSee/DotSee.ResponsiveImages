@@ -31,7 +31,21 @@ CSP-safe LQIP.
 
 ## Priorities
 
-### 1. Pluggable URL backend — highest value by a distance
+### 1. Pluggable URL backend — highest value by a distance — **DONE**
+
+> Implemented 2026-08-17. `IResponsiveImageUrlProvider` (`src/DotSee.ResponsiveImages/UrlProviders/`)
+> with `UmbracoImageUrlProvider` (default, unchanged behaviour) and
+> `CloudflareImageUrlProvider`, selected by `DotSee:ResponsiveImages:UrlProvider`. The
+> focal point crosses over as Cloudflare's `gravity`, `format=auto` is the default and
+> `UseWebP` still overrides it. `CdnPurgeUrlBuilder` goes through the same seam so purge
+> and render agree. Adding imgix or Cloudinary is now one class. User-facing docs:
+> `docs/configuration.md#cloudflare-image-transformations`.
+>
+> Worth knowing for whatever comes next: the seam is three methods (crop, placeholder,
+> path-only) because the purge path has no `IPublishedContent` and so no focal point, and
+> `Min`/`Stretch` crop modes are approximated as `fit=cover` — Cloudflare has no
+> equivalent. LQIP was deliberately left on local ImageSharp: it costs no request and no
+> billable transformation.
 
 `ImageUrlService.cs:48` hard-wires everything to Umbraco's `IImageUrlGenerator`, i.e.
 ImageSharp.Web querystrings. Extract an `IResponsiveImageUrlProvider` so the package can
@@ -41,13 +55,16 @@ Flips the story from "competes with Cloudflare" to "**drives** Cloudflare" — w
 markup, Cloudflare owns the pixels and the origin CPU. Same seam gets imgix, Cloudinary,
 Azure CDN for free, and lets `format=auto` replace `useWebP`.
 
-### 2. A variant budget
+### 2. A variant budget — now unblocked
 
 Cloudflare Transformations bill per unique transformation. 4 breakpoints × 3 DPI × alt
 images is a lot of billable variants, most never requested. A "generate at most N
 candidates, snapped to a shared width ladder across rule sets" option is a feature that
 *saves customers money* — nobody in the Umbraco space is selling that. Only becomes
-relevant once #1 exists.
+relevant once #1 exists, which it now does. `CandidateLadder` is the single place that
+decides which widths get generated, so a budget would go there and apply to both
+providers. Note the Cloudflare cache buster makes this sharper than it was: every media
+edit produces a fresh set of billable variants.
 
 ### 3. Close the Core Web Vitals gaps
 
@@ -67,11 +84,15 @@ Focal point, named crops, per-breakpoint art direction — this is the moat. It'
 and no CDN will ever have it. Anything that makes an editor's crop choice render
 correctly at every breakpoint is defensible work.
 
-### 5. Reposition the docs
+### 5. Reposition the docs — partly done
 
 Add a "Using with Cloudflare / a CDN" page saying plainly: keep Polish on, turn
 `useWebP` off, let us handle resolution and art direction. Today a Cloudflare customer
 reading the README sees overlap and bounces.
+
+> `docs/configuration.md#cloudflare-image-transformations` and a pointer in
+> `getting-started.md` now cover this. Still missing: the **README** front page, which is
+> where a Cloudflare customer actually forms their first impression.
 
 ## Deprioritise
 

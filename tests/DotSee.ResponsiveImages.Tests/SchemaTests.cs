@@ -7,6 +7,7 @@ using System.Text.Json;
 using DotSee.ResponsiveImages.Cdn;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
+using DotSee.ResponsiveImages.UrlProviders;
 using Umbraco.Cms.Core.Models;
 using Xunit;
 
@@ -51,6 +52,7 @@ public class SchemaTests
     [InlineData(typeof(RuleBreakPoint), "RuleBreakPoint")]
     [InlineData(typeof(GlobalLazyLoadSettings), "LazyLoadSettings")]
     [InlineData(typeof(ImageCdnSettings), "ImageCdnSettings")]
+    [InlineData(typeof(CloudflareImageSettings), "CloudflareImageSettings")]
     public void EverySettableSettingIsDescribedBySchema(Type settingsType, string definition)
     {
         var documented = PropertyNamesOf(definition).ToHashSet(StringComparer.Ordinal);
@@ -65,6 +67,7 @@ public class SchemaTests
     [InlineData(typeof(RuleBreakPoint), "RuleBreakPoint")]
     [InlineData(typeof(GlobalLazyLoadSettings), "LazyLoadSettings")]
     [InlineData(typeof(ImageCdnSettings), "ImageCdnSettings")]
+    [InlineData(typeof(CloudflareImageSettings), "CloudflareImageSettings")]
     public void SchemaDescribesNoSettingThatDoesNotExist(Type settingsType, string definition)
     {
         var bindable = BindablePropertiesOf(settingsType).ToHashSet(StringComparer.Ordinal);
@@ -84,6 +87,53 @@ public class SchemaTests
             .GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToList();
 
         Assert.Equal(Enum.GetNames(enumType).OrderBy(x => x), documented.OrderBy(x => x));
+    }
+
+    [Theory]
+    [InlineData(typeof(RuleSet), "RuleSet")]
+    [InlineData(typeof(RuleBreakPoint), "RuleBreakPoint")]
+    [InlineData(typeof(GlobalLazyLoadSettings), "LazyLoadSettings")]
+    [InlineData(typeof(ImageCdnSettings), "ImageCdnSettings")]
+    [InlineData(typeof(CloudflareImageSettings), "CloudflareImageSettings")]
+    public void DocumentedDefaultsMatchTheCode(Type settingsType, string definition)
+    {
+        // The schema's "default" values are hand-authored; the C# initialisers are what actually apply.
+        // This is the drift that let the schema claim CropMode defaults to "Min" while the effective
+        // default was Crop for as long as the setting existed.
+        object instance = settingsType == typeof(RuleSet) ? new RuleSet("sample") : Activator.CreateInstance(settingsType)!;
+        var mismatches = new List<string>();
+
+        foreach (var property in Definition(definition).GetProperty("properties").EnumerateObject())
+        {
+            if (!property.Value.TryGetProperty("default", out var documented)) { continue; }
+
+            var propertyInfo = settingsType.GetProperty(property.Name);
+            if (propertyInfo == null) { continue; }
+
+            var actual = propertyInfo.GetValue(instance);
+            string actualToken = actual switch
+            {
+                null => "null",
+                bool b => b ? "true" : "false",
+                Enum e => e.ToString(),
+                _ => Convert.ToString(actual, System.Globalization.CultureInfo.InvariantCulture)!
+            };
+            string documentedToken = documented.ValueKind switch
+            {
+                JsonValueKind.Null => "null",
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                JsonValueKind.String => documented.GetString()!,
+                _ => documented.GetRawText()
+            };
+
+            if (!string.Equals(actualToken, documentedToken, StringComparison.Ordinal))
+            {
+                mismatches.Add($"{definition}.{property.Name}: schema default '{documentedToken}', code default '{actualToken}'");
+            }
+        }
+
+        Assert.True(mismatches.Count == 0, string.Join("; ", mismatches));
     }
 
     [Fact]

@@ -1,8 +1,9 @@
-﻿using DotSee.ResponsiveImages.Caching;
+using DotSee.ResponsiveImages.Caching;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
 using Microsoft.AspNetCore.Html;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,6 +34,7 @@ namespace DotSee.ResponsiveImages
         private readonly ICacheService _cacheService;
         private readonly IConfiguration _configuration;
         private readonly ILqipService _lqipService;
+        private readonly ILogger<SrcSetManager> _logger;
 
         #region ctor
 
@@ -48,8 +50,10 @@ namespace DotSee.ResponsiveImages
             , ICacheService cacheService
             , IConfiguration configuration
             , ILqipService lqipService = null
+            , ILogger<SrcSetManager> logger = null
             )
         {
+            _logger = logger;
             _lqipService = lqipService;
             _ruleProvider = ruleProvider;
             _imageUrlGenerator = imageUrlGenerator;
@@ -75,51 +79,92 @@ namespace DotSee.ResponsiveImages
 
         public HtmlString GetBreakPointsCss(MediaWithCrops originalImage, string ruleSetName, string optionalQueryStringParameters = null, IHtmlContent nonceAttribute = null)
         {
-
-            if (UseWebP)
-            {
-                optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
-            }
+            optionalQueryStringParameters = ApplyGlobalUrlOptions(optionalQueryStringParameters);
 
             //Exit early conditions
             if (originalImage == null) { return null; }
 
+            // The variant folds the query string, WebP and focal point into the key AND the generated
+            // class name (both derive from GetCacheKey) — without it, two <ds:background> for the same
+            // image with different query strings would share one cache entry and one class, and
+            // whichever rendered first would win for both.
+            var variant = Helpers.GetCssVariant(originalImage, optionalQueryStringParameters);
+
             // Cache the nonce-less CSS (the nonce is per-request, so keying/caching by it would never hit
             // and would leak an entry per request). The nonce is injected into the cached <style> below.
             var retVal = _cacheService.GetCachedItem(
-                Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString())
+                Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString(), variant)
                 , () =>
                 {
                     ImageModel imageModel = _backgroundImageModelManager.GetImageModel(originalImage, ruleSetName, optionalQueryStringParameters);
-                    return _cssRenderer.RenderCss(imageModel);
-                }, timeout: TimeSpan.FromMinutes(20), isSliding: true);
+                    return imageModel == null ? null : _cssRenderer.RenderCss(imageModel);
+                }, timeout: TimeSpan.FromMinutes(20), isSliding: true
+                , nullResultTimeout: TimeSpan.FromMinutes(2));
 
             if (nonceAttribute != null)
             {
-                return InjectAfterTag(retVal, "<style", $" nonce='{nonceAttribute}'");
+                // The nonce lands inside an attribute of cached markup, so it is validated rather than
+                // encoded: a "nonce" that would need escaping is not a nonce, and injecting it would
+                // let whatever produced it break out of the <style> tag.
+                var nonce = StringifyHtmlContent(nonceAttribute);
+                return Helpers.IsValidNonce(nonce)
+                    ? InjectAfterTag(retVal, "<style", $" nonce='{nonce}'")
+                    : retVal;
             }
 
             return (retVal);
         }
 
+        private static string StringifyHtmlContent(IHtmlContent content)
+        {
+            if (content is HtmlString htmlString) { return htmlString.Value; }
+
+            using var writer = new System.IO.StringWriter();
+            content.WriteTo(writer, System.Text.Encodings.Web.HtmlEncoder.Default);
+            return writer.ToString();
+        }
+
+        /// <summary>
+        /// Applies the site-wide URL options to a per-call query string: <c>format=webp</c> when
+        /// <see cref="UseWebP"/> is on, and canonical query-string form either way — so the emitted URLs
+        /// (and the cache keys built from them) do not change shape with the WebP switch, and a hostile
+        /// value is neutralised before it reaches any URL.
+        /// </summary>
+        private string ApplyGlobalUrlOptions(string queryString)
+        {
+            return UseWebP
+                ? StringUtils.UpdateQueryString(queryString, "format", "webp")
+                : StringUtils.NormalizeQueryString(queryString);
+        }
+
         public HtmlString GetSrcSet(MediaWithCrops originalImage, string ruleSetName)
         {
-            var ruleSet = _cacheService.GetCachedItem(
-                Helpers.GetRulesetCacheKey(ruleSetName),
-                () => _ruleProvider.LoadRule(ruleSetName));
+            if (originalImage == null) { return null; }
+
+            var ruleSet = LoadRuleSet(ruleSetName);
+            if (ruleSet == null) { return null; }
 
             var config = GetConfigSection(originalImage, ruleSet);
             if (config == null) { return null; }
 
             StringBuilder sb = new StringBuilder(string.Empty);
 
-            //Remove "Center" because it contains a comma! Split the entry in two (image url and viewport) and reconnect them again
-            sb.Append(string.Join(",", config.SrcSetEntries.Select(x => StringUtils.RemoveQueryStringByKey(x.ImageUrl.Split(' ')[0], "center") + " " + x.ImageUrl.Split(' ')[1])));
+            //Remove "Center" because it contains a comma! Split the entry at its LAST space (the URL
+            //itself may contain spaces), fix up the URL half and reconnect the width descriptor.
+            sb.Append(string.Join(",", config.SrcSetEntries.Select(x =>
+            {
+                int descriptorStart = x.ImageUrl.LastIndexOf(' ');
+                if (descriptorStart < 0) { return x.ImageUrl; }
+                return StringUtils.RemoveQueryStringByKey(x.ImageUrl.Substring(0, descriptorStart), "center")
+                       + x.ImageUrl.Substring(descriptorStart);
+            })));
             return new HtmlString(sb.ToString());
         }
 
         public HtmlString GetSizes(MediaWithCrops originalImage, RuleSet ruleSet)
         {
+            if (originalImage == null || ruleSet == null) { return null; }
+
             var config = GetConfigSection(originalImage, ruleSet);
             if (config == null) { return null; }
             if (config.SizeEntries == null || config.SizeEntries.Count() == 0) { return null; }
@@ -129,7 +174,7 @@ namespace DotSee.ResponsiveImages
             StringBuilder sb = new StringBuilder(string.Empty);
 
             sb.Append(string.Join(",", config.SizeEntries));
-            sb.Append(", " + maxWidth.ToString() + Enum.GetName(typeof(SizeType), SizeType.px));
+            sb.Append(", " + maxWidth.ToString() + "px");
             return new HtmlString(sb.ToString());
         }
 
@@ -145,10 +190,11 @@ namespace DotSee.ResponsiveImages
         /// <returns></returns>
         public HtmlString CreatePictureElement(MediaWithCrops originalImage, string ruleSetName, string imageAlt = "", string imageClass = "", Dictionary<string, string> imageAttributes = null, string optionalQueryStringParameters = null, bool emitInlineLqip = true, bool aboveFold = false)
         {
-            if (UseWebP)
-            {
-                optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
-            }
+            // Same contract as every other method here: a null image renders nothing. This one used to
+            // NRE building its cache key instead.
+            if (originalImage == null) { return null; }
+
+            optionalQueryStringParameters = ApplyGlobalUrlOptions(optionalQueryStringParameters);
 
             if (!emitInlineLqip)
             {
@@ -192,13 +238,28 @@ namespace DotSee.ResponsiveImages
             , bool emitInlineLqip = true
             , bool aboveFold = false)
         {
-            var ruleSet = _cacheService.GetCachedItem(
-                Helpers.GetRulesetCacheKey(ruleSetName),
-                () => _ruleProvider.LoadRule(ruleSetName));
+            // The srcset attribute name is written into the tag as markup, not as a value, so it is
+            // whitelisted rather than encoded — anything that is not a plain attribute name falls back.
+            if (!Helpers.IsValidAttributeName(srcSetAttrName)) { srcSetAttrName = "srcset"; }
 
-            var config = GetConfigSection(originalImage, ruleSet);
+            if (originalImage == null) { return null; }
 
-            if (originalImage == null || config == null) { return null; }
+            // SVGs bypass the crop pipeline entirely, exactly as CreatePictureElement does — there is
+            // nothing to resize, and the preload hint already points at the bare URL, so building crop
+            // URLs here made the browser fetch the file twice under two different URLs.
+            if (IsSvg(originalImage))
+            {
+                return CreateSvgMarkup(originalImage, alt, title, imageClass, otherAttributes);
+            }
+
+            var ruleSet = LoadRuleSet(ruleSetName);
+            if (ruleSet == null) { return null; }
+
+            // UseWebP was documented as applying to "all generated URLs" but never reached this path.
+            var globalQueryString = ApplyGlobalUrlOptions(null);
+
+            var config = GetConfig(originalImage, ruleSet, globalQueryString);
+            if (config == null) { return null; }
 
             int maxWidth = GetLayoutMaxWidth(config);
 
@@ -216,7 +277,7 @@ namespace DotSee.ResponsiveImages
             sb.Append("\" ");
 
             sb.Append("src=\"");
-            sb.Append(_imageUrlService.GetCropUrl(originalImage, ruleSet, ruleSet.OriginalImageMaxWidth ?? 0, ruleSet.OriginalImageMaxHeight ?? 0));
+            sb.Append(Helpers.HtmlAttributeEncode(_imageUrlService.GetCropUrl(originalImage, ruleSet, ruleSet.OriginalImageMaxWidth ?? 0, ruleSet.OriginalImageMaxHeight ?? 0, globalQueryString)));
             sb.Append("\"");
 
             // Reserving the box up front is what stops the page reflowing as images arrive. Sized from
@@ -229,20 +290,33 @@ namespace DotSee.ResponsiveImages
                 sb.Append(Helpers.CreateAttribute("height", renderedHeight.ToString()));
             }
 
+            // A dictionary "class" would duplicate the class SetLazyLoadAttributes already wrote, and a
+            // duplicated attribute is invalid HTML the browser resolves by silently dropping the second;
+            // alt/title are always written below, so their dictionary twins are always dropped.
+            if (otherAttributes != null)
+            {
+                otherAttributes = otherAttributes
+                    .Where(x => !x.Key.InvariantEquals("alt")
+                                && !x.Key.InvariantEquals("title")
+                                && !(x.Key.InvariantEquals("class") && !string.IsNullOrEmpty(imageClass)))
+                    .ToDictionary(x => x.Key, x => x.Value);
+                if (otherAttributes.Count == 0) { otherAttributes = null; }
+            }
+
             // Inline LQIP (style/onload). Skipped in CSP mode, where the caller emits nonce-tagged blocks instead.
             if (_overriddenLazyLoad && emitInlineLqip)
             {
                 if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
                 {
-                    var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
-                        () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode));
+                    var lqipSource = Helpers.SanitizeCssUrl(Lqip.BlurSource(_lqipService, originalImage,
+                        () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet)));
                     sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s\"");
                     sb.Append(" onload=\"this.style.filter='none';this.style.backgroundImage='none'\"");
                 }
                 else if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage
                     && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
                 {
-                    sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')\"");
+                    sb.Append($" style=\"background-size:cover;background-repeat:no-repeat;background-image:url('{Helpers.SanitizeCssUrl(_lazyLoadSettings.LowResImagePath)}')\"");
                     sb.Append(" onload=\"this.style.backgroundImage='none'\"");
                 }
             }
@@ -250,7 +324,31 @@ namespace DotSee.ResponsiveImages
             sb.Append(Helpers.CreateAttribute("title", title));
             if (otherAttributes != null)
             {
-                sb.Append(string.Join(" ", otherAttributes.Select(x => Helpers.CreateAttribute(x.Key, x.Value).IfNull(x => ""))));
+                sb.Append(string.Join(" ", otherAttributes.Select(x => Helpers.CreateAttribute(x.Key, x.Value))));
+            }
+            sb.Append("/>");
+            return new HtmlString(sb.ToString());
+        }
+
+        /// <summary>
+        /// The plain-&lt;img&gt; markup for an SVG: the bare media URL, no srcset, no LQIP — the same
+        /// shape <see cref="PictureElementRenderer"/> emits for its SVG case, and the same URL the
+        /// preload hint points at.
+        /// </summary>
+        private static HtmlString CreateSvgMarkup(MediaWithCrops originalImage, string alt, string title, string imageClass, Dictionary<string, string> otherAttributes)
+        {
+            var sb = new StringBuilder("<img");
+            sb.Append(Helpers.CreateAttribute("src", originalImage.Url()));
+            if (!string.IsNullOrWhiteSpace(imageClass)) { sb.Append(Helpers.CreateAttribute("class", imageClass)); }
+            sb.Append(Helpers.CreateAttribute("alt", alt));
+            sb.Append(Helpers.CreateAttribute("title", title));
+            if (otherAttributes != null)
+            {
+                sb.Append(string.Join(" ", otherAttributes
+                    .Where(x => !x.Key.InvariantEquals("alt")
+                                && !x.Key.InvariantEquals("title")
+                                && !(x.Key.InvariantEquals("class") && !string.IsNullOrWhiteSpace(imageClass)))
+                    .Select(x => Helpers.CreateAttribute(x.Key, x.Value))));
             }
             sb.Append("/>");
             return new HtmlString(sb.ToString());
@@ -261,7 +359,7 @@ namespace DotSee.ResponsiveImages
             if (!string.IsNullOrEmpty(imageClass))
             {
                 sb.Append("class=\"");
-                sb.Append(imageClass);
+                sb.Append(Helpers.HtmlAttributeEncode(imageClass));
                 sb.Append("\" ");
             }
 
@@ -296,11 +394,16 @@ namespace DotSee.ResponsiveImages
             return attributes != null && attributes.Keys.Any(x => x.InvariantEquals(name));
         }
 
-        public string GetClassName(IPublishedContent originalImage, string ruleSetName)
+        /// <param name="optionalQueryStringParameters">
+        /// Pass the same value given to <see cref="GetBreakPointsCss"/>: the query string is part of the
+        /// generated class name, so the two calls must agree for the class to match its CSS block.
+        /// </param>
+        public string GetClassName(IPublishedContent originalImage, string ruleSetName, string optionalQueryStringParameters = null)
         {
             if (originalImage != null)
             {
-                var styleGuid = Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString());
+                var variant = Helpers.GetCssVariant(originalImage as MediaWithCrops, ApplyGlobalUrlOptions(optionalQueryStringParameters));
+                var styleGuid = Helpers.GetCacheKey(ruleSetName, originalImage.Key.ToString(), variant);
                 if (string.IsNullOrEmpty(styleGuid)) { return null; }
                 return string.Concat("media-image-", styleGuid);
             }
@@ -317,11 +420,11 @@ namespace DotSee.ResponsiveImages
         /// </summary>
         public CspLqip GetCspLqip(MediaWithCrops originalImage, string ruleSetName, string nonce, bool aboveFold = false)
         {
-            if (originalImage == null || string.IsNullOrWhiteSpace(nonce) || aboveFold) { return CspLqip.Inactive; }
+            // An invalid nonce is treated as no nonce: it goes into both a <style> and a <script> tag
+            // and could otherwise break out of them (see Helpers.IsValidNonce).
+            if (originalImage == null || !Helpers.IsValidNonce(nonce) || aboveFold) { return CspLqip.Inactive; }
 
-            var ruleSet = _cacheService.GetCachedItem(
-                Helpers.GetRulesetCacheKey(ruleSetName),
-                () => _ruleProvider.LoadRule(ruleSetName));
+            var ruleSet = LoadRuleSet(ruleSetName);
 
             if (ruleSet == null || !_lazyLoadSettings.IsLazyLoadEnabled(ruleSet)) { return CspLqip.Inactive; }
 
@@ -330,8 +433,8 @@ namespace DotSee.ResponsiveImages
 
             if (_lazyLoadSettings.PreviewType == PreviewType.Blur)
             {
-                var lqipSource = Lqip.BlurSource(_lqipService, originalImage,
-                    () => originalImage.GetCropUrl(_imageUrlGenerator, null, _publishedUrlProvider, width: 40, quality: 20, imageCropMode: ruleSet.CropMode));
+                var lqipSource = Helpers.SanitizeCssUrl(Lqip.BlurSource(_lqipService, originalImage,
+                    () => _imageUrlService.GetPlaceholderUrl(originalImage, ruleSet)));
                 var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{lqipSource}');filter:blur(20px);transition:filter 0.3s}}</style>";
                 var script = $"<script nonce=\"{nonce}\">document.querySelector('{selector}').addEventListener('load',function(){{this.style.filter='none';this.style.backgroundImage='none'}});</script>";
                 return new CspLqip(uniqueId, new HtmlString(style), new HtmlString(script));
@@ -339,7 +442,7 @@ namespace DotSee.ResponsiveImages
 
             if (_lazyLoadSettings.PreviewType == PreviewType.LowResImage && !string.IsNullOrWhiteSpace(_lazyLoadSettings.LowResImagePath))
             {
-                var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{_lazyLoadSettings.LowResImagePath}')}}</style>";
+                var style = $"<style nonce=\"{nonce}\">{selector}{{background-size:cover;background-repeat:no-repeat;background-image:url('{Helpers.SanitizeCssUrl(_lazyLoadSettings.LowResImagePath)}')}}</style>";
                 var script = $"<script nonce=\"{nonce}\">document.querySelector('{selector}').addEventListener('load',function(){{this.style.backgroundImage='none'}});</script>";
                 return new CspLqip(uniqueId, new HtmlString(style), new HtmlString(script));
             }
@@ -361,20 +464,13 @@ namespace DotSee.ResponsiveImages
         {
             if (originalImage == null) { return null; }
 
-            if (UseWebP)
-            {
-                optionalQueryStringParameters = StringUtils.UpdateQueryString(optionalQueryStringParameters, "format", "webp");
-            }
-
-            var queryString = optionalQueryStringParameters;
+            var queryString = ApplyGlobalUrlOptions(optionalQueryStringParameters);
 
             return _cacheService.GetCachedItem(
-                $"preload_picture_{originalImage.Id}_{ruleSetName}_{queryString}"
+                string.Join(KeySeparator, "preload_picture", originalImage.Id, ruleSetName, queryString, FocalPointKey(originalImage))
                 , () =>
                 {
-                    var ruleSet = _cacheService.GetCachedItem(
-                        Helpers.GetRulesetCacheKey(ruleSetName),
-                        () => _ruleProvider.LoadRule(ruleSetName));
+                    var ruleSet = LoadRuleSet(ruleSetName);
 
                     if (ruleSet == null) { return null; }
 
@@ -406,12 +502,10 @@ namespace DotSee.ResponsiveImages
             if (originalImage == null) { return null; }
 
             return _cacheService.GetCachedItem(
-                $"preload_img_{originalImage.Id}_{ruleSetName}"
+                string.Join(KeySeparator, "preload_img", originalImage.Id, ruleSetName, FocalPointKey(originalImage), ApplyGlobalUrlOptions(null))
                 , () =>
                 {
-                    var ruleSet = _cacheService.GetCachedItem(
-                        Helpers.GetRulesetCacheKey(ruleSetName),
-                        () => _ruleProvider.LoadRule(ruleSetName));
+                    var ruleSet = LoadRuleSet(ruleSetName);
 
                     if (ruleSet == null) { return null; }
 
@@ -436,15 +530,71 @@ namespace DotSee.ResponsiveImages
 
         private SrcSetConfig GetConfigSection(MediaWithCrops originalImage, RuleSet ruleSet)
         {
-            return GetConfig(originalImage, ruleSet);
+            // The srcset attribute value paths (GetSrcSet / GetSizes / preloads) carry the same global
+            // URL options as the rendered markup, so UseWebP means what the documentation says: every
+            // generated URL.
+            return GetConfig(originalImage, ruleSet, ApplyGlobalUrlOptions(null));
         }
+
+        /// <summary>
+        /// Resolves a rule set through the cache, logging when the name matches nothing — a typo'd
+        /// rule-set name in a view used to surface as a NullReferenceException several layers down.
+        /// Null results (unknown name, or a transient failure inside the provider) are cached briefly
+        /// rather than for the full window, so a hiccup doesn't pin every image to the error path.
+        /// </summary>
+        /// <remarks>
+        /// The warning is emitted inside the factory, i.e. only when the provider is actually consulted.
+        /// Logging it on the way out instead would repeat it for every cache hit on the negative entry —
+        /// one typo'd rule set on a page of fifty images meant fifty identical warnings per request. Once
+        /// per negative-cache window still surfaces the misconfiguration, without the flood.
+        /// </remarks>
+        private RuleSet LoadRuleSet(string ruleSetName)
+        {
+            return _cacheService.GetCachedItem(
+                Helpers.GetRulesetCacheKey(ruleSetName),
+                () =>
+                {
+                    var loaded = _ruleProvider.LoadRule(ruleSetName);
+
+                    if (loaded == null)
+                    {
+                        _logger?.LogWarning("Rule set '{RuleSetName}' was not found in DotSee:ResponsiveImages; nothing will be rendered for it.", ruleSetName);
+                    }
+
+                    return loaded;
+                },
+                nullResultTimeout: TimeSpan.FromMinutes(2));
+        }
+
+        /// <summary>
+        /// Separator for cache-key parts. A control character, because the parts include free text —
+        /// with "_" as both separator and legal payload, alt "Spring_Sale" + class "" collided with
+        /// alt "Spring" + class "Sale" and served one element's cached markup for the other.
+        /// </summary>
+        private const char KeySeparator = '\u001f';
 
         private static string BuildPictureCacheKey(string prefix, MediaWithCrops originalImage, string ruleSetName, string imageAlt, string imageClass, Dictionary<string, string> imageAttributes, string optionalQueryStringParameters, bool aboveFold)
         {
             var attrsKey = imageAttributes != null
-                ? string.Join("_", imageAttributes.OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value))
+                ? string.Join(KeySeparator, imageAttributes.OrderBy(x => x.Key).Select(x => x.Key + "=" + x.Value))
                 : string.Empty;
-            return $"{prefix}_{originalImage.Id}_{ruleSetName}_{imageAlt}_{imageClass}_{attrsKey}_{optionalQueryStringParameters}_{aboveFold}";
+            return string.Join(KeySeparator,
+                prefix, originalImage.Id, ruleSetName, imageAlt, imageClass, attrsKey,
+                optionalQueryStringParameters, aboveFold, FocalPointKey(originalImage));
+        }
+
+        /// <summary>
+        /// The picker's focal point as a key component. The rendered URLs depend on it (rxy / gravity),
+        /// so two content nodes picking the same media with different focal points must not share an
+        /// entry.
+        /// </summary>
+        private static string FocalPointKey(MediaWithCrops image)
+        {
+            var focalPoint = image?.LocalCrops?.FocalPoint;
+            return focalPoint == null
+                ? string.Empty
+                : focalPoint.Left.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                  + "x" + focalPoint.Top.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         /// <summary>
@@ -470,7 +620,7 @@ namespace DotSee.ResponsiveImages
         /// That is also all a "w" srcset needs: the browser resolves the device pixel ratio against
         /// <c>sizes</c> by itself and picks the right candidate.
         /// </remarks>
-        private SrcSetConfig GetConfig(MediaWithCrops originalImage, RuleSet rs)
+        private SrcSetConfig GetConfig(MediaWithCrops originalImage, RuleSet rs, string queryString = null)
         {
             SrcSetConfig retVal = new SrcSetConfig();
 
@@ -482,7 +632,7 @@ namespace DotSee.ResponsiveImages
                     Width = candidate.Width,
                     Is2x = candidate.DpiFactor == 2,
                     Is3x = candidate.DpiFactor == 3,
-                    ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, candidate.Width, candidate.Height) + " " + candidate.Width + "w"
+                    ImageUrl = _imageUrlService.GetAltImageUrlOrDefault(originalImage, rs, candidate.Width, candidate.Height, queryString) + " " + candidate.Width + "w"
                 });
             }
 
@@ -506,17 +656,14 @@ namespace DotSee.ResponsiveImages
         /// </summary>
         private static string BuildSizesValue(SrcSetConfig config, int maxWidth)
         {
-            var trailingDefault = maxWidth.ToString() + Enum.GetName(typeof(SizeType), SizeType.px);
+            var trailingDefault = maxWidth.ToString() + "px";
 
             return config.SizeEntries == null || config.SizeEntries.Count == 0
                 ? trailingDefault
                 : string.Join(",", config.SizeEntries) + ", " + trailingDefault;
         }
 
-        private static bool IsSvg(MediaWithCrops image)
-        {
-            return string.Equals(System.IO.Path.GetExtension(image.Url()), ".svg", StringComparison.OrdinalIgnoreCase);
-        }
+        private static bool IsSvg(MediaWithCrops image) => Helpers.IsSvg(image);
 
         /// <summary>
         /// Renders one preload hint. fetchpriority="high" is what actually moves it ahead of the rest of

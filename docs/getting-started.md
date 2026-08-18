@@ -110,6 +110,10 @@ Add a rule set to your `appsettings.json`:
 
 > Upgrading from an earlier version? The previous layout — `DotSee:ResponsiveImages` as a bare array with a root-level `lazyload` section — still works unchanged. See [Configuration Layout](configuration.md#configuration-layout).
 
+### Behind Cloudflare?
+
+Add `"UrlProvider": "Cloudflare"` and the package emits `/cdn-cgi/image/…` URLs so the resizing happens at the edge instead of on your origin — same rule sets, same markup, same focal point. See [Cloudflare image transformations](configuration.md#cloudflare-image-transformations).
+
 ## Quick Usage
 
 ### Tag Helper

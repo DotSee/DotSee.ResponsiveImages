@@ -31,6 +31,14 @@ namespace DotSee.ResponsiveImages
         public const string LazyLoadKey = "LazyLoad";
         public const string UseWebPKey = "UseWebP";
         public const string SuppressTagHelperWarningsKey = "SuppressTagHelperWarnings";
+        public const string UrlProviderKey = "UrlProvider";
+        public const string CloudflareKey = "Cloudflare";
+
+        /// <summary>The default URL provider: Umbraco's own image URL generator.</summary>
+        public const string UmbracoUrlProvider = "Umbraco";
+
+        /// <summary>The Cloudflare URL provider, emitting <c>/cdn-cgi/image/…</c> URLs.</summary>
+        public const string CloudflareUrlProvider = "Cloudflare";
 
         /// <summary>Where lazy-load settings used to live, at the root of appsettings.json.</summary>
         public const string LegacyLazyLoadSection = "lazyload";
@@ -93,6 +101,33 @@ namespace DotSee.ResponsiveImages
             var value = configuration.GetSection(RootSection).GetSection(SuppressTagHelperWarningsKey).Value;
 
             return !string.IsNullOrWhiteSpace(value) && bool.TryParse(value, out bool suppress) && suppress;
+        }
+
+        /// <summary>
+        /// Which backend generates image URLs — <c>Umbraco</c> (the default) or <c>Cloudflare</c>.
+        /// </summary>
+        /// <remarks>
+        /// There is deliberately no legacy fallback: under the original layout <c>DotSee:ResponsiveImages</c>
+        /// <em>is</em> the rule set array and cannot carry a named key, so a site on that layout has to nest
+        /// its rule sets under <c>RuleSets</c> before it can select a provider. Everything else about the old
+        /// layout keeps working.
+        /// </remarks>
+        public static string GetUrlProvider(IConfiguration configuration)
+        {
+            if (configuration == null) { return UmbracoUrlProvider; }
+
+            var value = configuration.GetSection(RootSection).GetSection(UrlProviderKey).Value;
+
+            return string.IsNullOrWhiteSpace(value) ? UmbracoUrlProvider : value.Trim();
+        }
+
+        /// <summary>
+        /// The section holding the Cloudflare URL provider's settings. Every value there has a working
+        /// default, so the section may be absent entirely.
+        /// </summary>
+        public static IConfigurationSection GetCloudflareSection(IConfiguration configuration)
+        {
+            return configuration.GetSection(RootSection).GetSection(CloudflareKey);
         }
 
         /// <summary>

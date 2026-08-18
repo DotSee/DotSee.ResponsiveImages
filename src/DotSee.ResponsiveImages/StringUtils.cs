@@ -12,6 +12,20 @@ namespace DotSee.ResponsiveImages
             return qs.ToString();
         }
 
+        /// <summary>
+        /// Round-trips a caller-supplied query string through the parser so it comes out in canonical,
+        /// URL-encoded form. <see cref="UpdateQueryString"/> already has this effect when WebP is on;
+        /// applying it unconditionally means the emitted URLs don't change shape with that switch, and
+        /// characters that could break out of an HTML attribute are encoded before the value reaches
+        /// any URL.
+        /// </summary>
+        public static string NormalizeQueryString(string queryString)
+        {
+            if (string.IsNullOrWhiteSpace(queryString)) { return queryString; }
+
+            return HttpUtility.ParseQueryString(queryString.TrimStart('&', '?')).ToString();
+        }
+
         public static string RemoveQueryStringByKey(string url, string key)
         {
             if (!url.StartsWith("http")) { url = "http://localhost" + url; }

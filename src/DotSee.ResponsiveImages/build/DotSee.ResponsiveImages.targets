@@ -1,14 +1,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 	<ItemGroup>
-		<DotSeeResponsiveImagesFiles Include="$(MSBuildThisFileDirectory)..\content\DotSee.ResponsiveImages\**\*.*" />
 		<DotSeeResponsiveImagesSchemaFiles Include="$(MSBuildThisFileDirectory)..\content\DotSee.ResponsiveImages.Schema\*.json" />
 	</ItemGroup>
-
-	<Target Name="DotSeeResponsiveImagesCopyFiles" BeforeTargets="BeforeBuild">
-		<Copy
-			SourceFiles="@(DotSeeResponsiveImagesFiles)"
-			DestinationFiles="@(DotSeeResponsiveImagesFiles->'$(MSBuildProjectDirectory)\App_Plugins\DotSee.ResponsiveImages\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="false" />
-	</Target>
 
 	<!-- The appsettings JSON schema has to sit next to appsettings.json for a relative $ref to resolve. -->
 	<Target Name="DotSeeResponsiveImagesCopySchema" BeforeTargets="BeforeBuild">

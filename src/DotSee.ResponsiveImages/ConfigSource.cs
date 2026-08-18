@@ -11,7 +11,9 @@ namespace DotSee.ResponsiveImages
         
         public RuleSet GetRuleByName(string name)
         {
-            return AllRuleSets.FirstOrDefault(r => r.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase));
+            // static string.Equals, so one rule set with a null Name cannot make every lookup throw
+            // while scanning past it.
+            return AllRuleSets.FirstOrDefault(r => string.Equals(r.Name, name, System.StringComparison.OrdinalIgnoreCase));
         }
     }
 }

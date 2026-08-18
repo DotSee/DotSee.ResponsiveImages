@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Text.Encodings.Web;
+using System.Text.Unicode;
 using DotSee.ResponsiveImages.Models;
 using Umbraco.Cms.Core.Models.PublishedContent;
 
@@ -6,6 +8,13 @@ namespace DotSee.ResponsiveImages
 {
     public static class Helpers
     {
+        /// <summary>
+        /// Encoder for attribute values. Allows the full Unicode range so non-Latin alt text stays
+        /// readable in the markup instead of becoming numeric entities; the HTML-significant characters
+        /// are still encoded regardless of the allowed ranges.
+        /// </summary>
+        private static readonly HtmlEncoder AttributeEncoder = HtmlEncoder.Create(UnicodeRanges.All);
+
         /// <summary>
         /// Reads the media item's stored pixel dimensions (umbracoWidth / umbracoHeight).
         /// </summary>
@@ -76,6 +85,23 @@ namespace DotSee.ResponsiveImages
             }
         }
 
+        /// <summary>
+        /// Whether the media item is an SVG, which bypasses the whole crop pipeline — there is nothing
+        /// to resize and image processors can't transform it. Case-insensitive (".SVG" exports are
+        /// common) and tolerant of a query string on the URL, and shared so the renderers and the
+        /// preload builders cannot disagree about what counts as an SVG.
+        /// </summary>
+        public static bool IsSvg(IPublishedContent image)
+        {
+            string url = image?.Url();
+            if (string.IsNullOrEmpty(url)) { return false; }
+
+            int queryStart = url.IndexOf('?');
+            if (queryStart >= 0) { url = url.Substring(0, queryStart); }
+
+            return string.Equals(System.IO.Path.GetExtension(url), ".svg", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static int GetBreakPointWidth(RuleBreakPoint b, RuleSet ruleSet)
         {
             return (b.Width > 0)
@@ -120,14 +146,171 @@ namespace DotSee.ResponsiveImages
             return ((int)newWidth);
         }
 
+        /// <summary>
+        /// Renders one HTML attribute. The value is HTML-encoded here — this is the single sink for
+        /// alt text, titles, classes, URLs and caller-supplied attribute dictionaries, all of which can
+        /// carry editor-entered content, so encoding anywhere else would leave a gap. The name is
+        /// restricted to attribute-legal characters so a hostile dictionary key cannot smuggle in a
+        /// second attribute, and the attribute is dropped entirely if nothing usable is left.
+        /// </summary>
         public static string CreateAttribute(string title, string value)
         {
-            return (string.Concat(" ", title, "=\"", value, "\""));
+            var name = SanitizeAttributeName(title);
+
+            // Stripping can leave something that is not a usable attribute name at all — nothing (for a
+            // key made entirely of illegal characters, which would emit a nameless ="value") or a
+            // digit-leading name. Emit no attribute rather than malformed markup.
+            if (!IsValidAttributeName(name)) { return string.Empty; }
+
+            return (string.Concat(" ", name, "=\"", HtmlAttributeEncode(value), "\""));
         }
 
-        public static string GetCacheKey(string ruleSetName, string imageKey)
+        /// <summary>HTML-encodes text for use inside a double-quoted attribute value.</summary>
+        public static string HtmlAttributeEncode(string value)
         {
-            return CacheLiteralsRS.CachedImagesClassName + ruleSetName + "_" + imageKey.ToString().Replace("-", "");
+            return string.IsNullOrEmpty(value) ? value ?? string.Empty : AttributeEncoder.Encode(value);
+        }
+
+        private static string SanitizeAttributeName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) { return name ?? string.Empty; }
+
+            Span<char> buffer = name.Length <= 128 ? stackalloc char[name.Length] : new char[name.Length];
+            int kept = 0;
+            foreach (char c in name)
+            {
+                if (char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_' || c == ':' || c == '.')
+                {
+                    buffer[kept++] = c;
+                }
+            }
+
+            return kept == name.Length ? name : new string(buffer[..kept]);
+        }
+
+        /// <summary>
+        /// Makes a URL safe to interpolate into a CSS <c>url('…')</c>. Inside a &lt;style&gt; block HTML
+        /// entities are NOT decoded, so HTML-encoding is the wrong tool there; percent-encoding the
+        /// CSS-significant characters preserves the URL's meaning in both the attribute and the
+        /// stylesheet context.
+        /// </summary>
+        /// <remarks>
+        /// Applies to <c>data:</c> URIs too. They are not automatically ours: <c>LowResImagePath</c> is
+        /// configuration and <see cref="LazyLoad.ILqipService"/> is a replaceable public interface, so a
+        /// data URI carrying a quote could otherwise close the surrounding <c>style</c> attribute, and one
+        /// carrying <c>&lt;/style&gt;</c> could close a whole &lt;style&gt; block. Our own base64 output
+        /// contains none of the replaced characters, so this is a no-op for it; a plain-text SVG data URI
+        /// comes out percent-encoded, which is the canonical form for CSS <c>url()</c> anyway.
+        /// </remarks>
+        public static string SanitizeCssUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) { return url ?? string.Empty; }
+
+            return url
+                .Replace("\\", "%5C")
+                .Replace("'", "%27")
+                .Replace("\"", "%22")
+                .Replace("<", "%3C")
+                .Replace(">", "%3E")
+                .Replace("(", "%28")
+                .Replace(")", "%29")
+                .Replace(" ", "%20");
+        }
+
+        /// <summary>
+        /// True when the string is a usable HTML attribute name: an ASCII letter or underscore first,
+        /// then letters, digits, <c>-</c>, <c>_</c>, <c>:</c> or <c>.</c>. Used to whitelist
+        /// caller-supplied attribute <em>names</em>, which are written into the tag as markup and
+        /// therefore cannot be made safe by encoding.
+        /// </summary>
+        /// <remarks>
+        /// The trailing set matches what <see cref="SanitizeAttributeName"/> preserves, so names that are
+        /// legal but not plain — <c>xlink:href</c>, <c>data_foo</c>, framework-style <c>v-bind.sync</c> —
+        /// are kept rather than rejected. A leading digit, <c>-</c>, <c>:</c> or <c>.</c> is rejected:
+        /// none of those start a valid attribute name.
+        /// </remarks>
+        public static bool IsValidAttributeName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) { return false; }
+            if (!char.IsAsciiLetter(name[0]) && name[0] != '_') { return false; }
+
+            for (int i = 1; i < name.Length; i++)
+            {
+                char c = name[i];
+                if (!char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_' && c != ':' && c != '.') { return false; }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// True when the string is safe to interpolate as a CSP nonce attribute value: the base64 /
+        /// base64url alphabet browsers actually issue. Anything else is rejected rather than encoded —
+        /// a "nonce" that needs escaping is not a nonce.
+        /// </summary>
+        public static bool IsValidNonce(string nonce)
+        {
+            if (string.IsNullOrWhiteSpace(nonce)) { return false; }
+
+            foreach (char c in nonce)
+            {
+                if (!char.IsAsciiLetterOrDigit(c) && c != '+' && c != '/' && c != '=' && c != '-' && c != '_')
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Key for a rendered background-CSS block, which doubles as the generated CSS class name. The
+        /// optional variant carries everything else the CSS depends on (per-call query string, WebP,
+        /// focal point) as a short hash — without it two variants share one cache entry AND one class
+        /// name, so whichever renders first wins for both. Null/empty variant keeps the historical
+        /// key/class shape.
+        /// </summary>
+        public static string GetCacheKey(string ruleSetName, string imageKey, string variant = null)
+        {
+            var key = CacheLiteralsRS.CachedImagesClassName + ruleSetName + "_" + imageKey.ToString().Replace("-", "");
+            return string.IsNullOrEmpty(variant) ? key : key + "_" + ShortHash(variant);
+        }
+
+        /// <summary>
+        /// The variant discriminator for background CSS: the effective query string plus the focal
+        /// point. Returns null when neither applies, so the common case keeps its historical class name.
+        /// </summary>
+        public static string GetCssVariant(Umbraco.Cms.Core.Models.MediaWithCrops image, string effectiveQueryString)
+        {
+            var focalPoint = image?.LocalCrops?.FocalPoint;
+            string focalToken = focalPoint == null
+                ? null
+                : focalPoint.Left.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                  + "," + focalPoint.Top.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            if (string.IsNullOrEmpty(effectiveQueryString) && focalToken == null) { return null; }
+
+            return (effectiveQueryString ?? string.Empty) + "|" + focalToken;
+        }
+
+        /// <summary>
+        /// Deterministic (FNV-1a) short hash. <see cref="string.GetHashCode()"/> is randomised per
+        /// process, which would make cache keys and generated class names differ across restarts.
+        /// </summary>
+        public static string ShortHash(string value)
+        {
+            if (string.IsNullOrEmpty(value)) { return "0"; }
+
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (char c in value)
+                {
+                    hash ^= c;
+                    hash *= 16777619;
+                }
+                return hash.ToString("x8");
+            }
         }
 
         public static string GetRulesetCacheKey(string ruleSetName)

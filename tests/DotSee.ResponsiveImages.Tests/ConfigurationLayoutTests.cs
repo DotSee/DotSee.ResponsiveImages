@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DotSee.ResponsiveImages.LazyLoad;
 using DotSee.ResponsiveImages.Models;
+using DotSee.ResponsiveImages.UrlProviders;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -155,6 +156,57 @@ public class ConfigurationLayoutTests
     {
         //Tag helpers accept a null IConfiguration so they stay constructible outside DI.
         Assert.False(ResponsiveImagesConfiguration.GetSuppressTagHelperWarnings(null));
+    }
+
+    // ---- URL provider ----
+
+    [Fact]
+    public void UrlProvider_IsReadFromTheNestedKey()
+    {
+        var config = Config(new Dictionary<string, string?>
+        {
+            ["DotSee:ResponsiveImages:UrlProvider"] = "Cloudflare"
+        });
+
+        Assert.Equal("Cloudflare", ResponsiveImagesConfiguration.GetUrlProvider(config));
+    }
+
+    [Fact]
+    public void UrlProvider_DefaultsToUmbraco()
+    {
+        Assert.Equal("Umbraco", ResponsiveImagesConfiguration.GetUrlProvider(Config(new Dictionary<string, string?>())));
+        Assert.Equal("Umbraco", ResponsiveImagesConfiguration.GetUrlProvider(null));
+    }
+
+    [Fact]
+    public void UrlProvider_DefaultsToUmbracoOnTheLegacyBareArrayLayout()
+    {
+        // The old layout makes DotSee:ResponsiveImages the array itself, so it cannot carry a named key.
+        // Such a site keeps working on the default provider; selecting one means nesting the rule sets first.
+        Assert.Equal("Umbraco", ResponsiveImagesConfiguration.GetUrlProvider(Config(LegacyLayout)));
+    }
+
+    [Fact]
+    public void CloudflareSettings_BindFromTheNestedSectionAndDefaultOtherwise()
+    {
+        var configured = new CloudflareImageSettings();
+        ResponsiveImagesConfiguration.GetCloudflareSection(Config(new Dictionary<string, string?>
+        {
+            ["DotSee:ResponsiveImages:Cloudflare:Prefix"] = "/images/resize",
+            ["DotSee:ResponsiveImages:Cloudflare:Format"] = "webp"
+        })).Bind(configured);
+
+        Assert.Equal("/images/resize", configured.Prefix);
+        Assert.Equal("webp", configured.Format);
+
+        var defaults = new CloudflareImageSettings();
+        ResponsiveImagesConfiguration.GetCloudflareSection(Config(new Dictionary<string, string?>())).Bind(defaults);
+
+        Assert.Equal("/cdn-cgi/image", defaults.Prefix);
+        Assert.Equal("auto", defaults.Format);
+        Assert.Null(defaults.BaseUrl);
+        Assert.Null(defaults.Metadata);
+        Assert.Equal("redirect", defaults.OnError);
     }
 
     // ---- layout detection ----
