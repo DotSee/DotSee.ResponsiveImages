@@ -1,3 +1,16 @@
+# Use this in your staging branch
+trigger:
+  batch: true
+  branches:
+    include:
+      - staging
+    exclude:
+      - develop
+      - master
+
+# Explicitly disable PR triggers if you only want the build to run POST-merge
+pr: none
+
 pool:
   name: Default
 
