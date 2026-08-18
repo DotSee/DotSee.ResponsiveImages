@@ -35,19 +35,18 @@ steps:
 #     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
 #     destinationGitRepositoryPersonalAccessToken: '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'
 
-- task: gittools.gittools.setup-gitversion-task.gitversion/setup@0
+- task: gitversion-setup@4
   displayName: gitversion/setup
   inputs:
     versionSpec: 5.12.0
-
-- task: gittools.gittools.execute-gitversion-task.gitversion/execute@0
+  
+- task: gitversion-execute@4
   displayName: gitversion/execute
   inputs:
-    useConfigFile: true
     configFilePath: src/gitversion.yml
     updateAssemblyInfo: true
 
-- task: ATP.ATP-GitTag.GitTag.GitTag@7
+- task: GitTag@7
   displayName: 'GitTag '
   inputs:
     tagUser: 'Sotiris Filippidis'
@@ -57,7 +56,7 @@ steps:
     useLightweightTags: true
     forceTagCreation: true
 
-- task: bleddynrichards.Assembly-Info-Task.Assembly-Info-NetCore.Assembly-Info-NetCore@3
+- task: Assembly-Info-NetCore@3
   displayName: 'Set Assembly Manifest Data'
   inputs:
     PackageId: DotSee.ResponsiveImages
