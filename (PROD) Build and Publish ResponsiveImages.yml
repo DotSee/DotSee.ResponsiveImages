@@ -49,7 +49,7 @@ steps:
   displayName: gitversion/execute
   inputs:
     configFilePath: src/gitversion.yml
-    updateAssemblyInfo: true
+    updateAssemblyInfo: false
 
 - task: GitTag@7
   displayName: 'GitTag '
