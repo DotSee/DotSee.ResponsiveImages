@@ -1,4 +1,3 @@
-# Use this in your staging branch
 trigger:
   batch: true
   branches:
@@ -16,38 +15,57 @@ pool:
 
 variables:
   RestoreBuildProjects: '**/dotsee.responsiveimages.csproj'
+  BuildConfiguration: "Release"
 
 steps:
+- checkout: self
+  fetchDepth: 0
+  displayName: "Checkout solution"
+  persistCredentials: true
+  clean: true
+
 - task: DotNetCoreCLI@2
   displayName: Restore
   inputs:
-    command: restore
-    projects: '$(Parameters.RestoreBuildProjects)'
+    command: "restore"
+    feedsToUse: "config"    
     verbosityRestore: Detailed
     verbosityPack: Detailed
 
-# - task: swellaby.mirror-git-repository.mirror-git-repository-vsts-task.mirror-git-repository-vsts-task@1
-#   displayName: 'Mirror Git Repository to https://github.com/DotSee/DotSee.ResponsiveImages'
-#   inputs:
-#     sourceGitRepositoryUri: 'https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages'
-#     sourceGitRepositoryPersonalAccessToken: 4iayLLNN6KfaJnPRXyXlOK38MYkD4CKXi2SzpRDnadzvKb5JeEEAJQQJ99BEACAAAAAM3hCKAAASAZDOKRCS
-#     sourceGitRepositoryCloneDirectoryName: Discipline
-#     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
-#     destinationGitRepositoryPersonalAccessToken: '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'
-
-- task: gittools.gittools.setup-gitversion-task.gitversion/setup@0
-  displayName: gitversion/setup
+- task: mirror-git-repository-vsts-task@1
+  displayName: "Mirror Git Repository to https://github.com/DotSee/DotSee.ResponsiveImages"
   inputs:
-    versionSpec: 5.12.0
+    sourceGitRepositoryUri: 'https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages'
+    sourceGitRepositoryPersonalAccessToken: 4iayLLNN6KfaJnPRXyXlOK38MYkD4CKXi2SzpRDnadzvKb5JeEEAJQQJ99BEACAAAAAM3hCKAAASAZDOKRCS
+    sourceGitRepositoryCloneDirectoryName: DotSee.ResponsiveImages
+    destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
+    destinationGitRepositoryPersonalAccessToken: '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'
 
-- task: gittools.gittools.execute-gitversion-task.gitversion/execute@0
+- task: NuGetToolInstaller@1
+  displayName: "Install 'Nuget' tool"
+  inputs:
+    versionSpec: "7.x"
+    checkLatest: true
+
+- task:  gitversion-setup@4
+  displayName: "gitversion/setup"
+  inputs:
+    versionSpec: 6.x
+    preferLatestVersion: true
+    # nugetConfigPath: 'nuget.config'
+  
+- task: gitversion-execute@4
   displayName: gitversion/execute
   inputs:
-    useConfigFile: true
     configFilePath: src/gitversion.yml
     updateAssemblyInfo: true
 
-- task: ATP.ATP-GitTag.GitTag.GitTag@7
+- script: |
+    echo $(GitVersion_SemVer)
+  displayName: "Print build version number"
+  name: version_print
+
+- task: GitTag@7
   displayName: 'GitTag '
   inputs:
     tagUser: 'Sotiris Filippidis'
@@ -57,17 +75,20 @@ steps:
     useLightweightTags: true
     forceTagCreation: true
 
-- task: bleddynrichards.Assembly-Info-Task.Assembly-Info-NetCore.Assembly-Info-NetCore@3
+- task: Assembly-Info-NetCore@3
   displayName: 'Set Assembly Manifest Data'
   inputs:
     PackageId: DotSee.ResponsiveImages
     Authors: DotSee
     Company: 'Dotsee Web Services SA'
     PackageLicenseExpression: MIT
-    VersionNumber: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
-    FileVersionNumber: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
-    InformationalVersion: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
-    PackageVersion: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
+    VersionNumber: "$(GitVersion_SemVer)"
+    FileVersionNumber: "$(GitVersion_SemVer)"
+    InformationalVersion: "$(GitVersion_SemVer)"
+    PackageVersion: "$(GitVersion_SemVer)"
+    Product: "Responsive Images"
+    Copyright: "Copyright © $(date:YYYY) DotSee Web Services S.A."
+
 
 - task: DotNetCoreCLI@2
   displayName: 'dotnet pack'
@@ -75,21 +96,23 @@ steps:
     command: pack
     verbosityRestore: Detailed
     packagesToPack: src/DotSee.ResponsiveImages/DotSee.ResponsiveImages.csproj
-    versioningScheme: byBuildNumber
-    buildProperties: 'Authors="DotSee Web Services";Owners="DotSee Web Services";Product="DotSee.ResponsiveImages";PackageLicenseExpression="MIT";MaintainerEmail="hello@dot-see.com";Description="A package enabing you to automatically create nodes / put restrictions on the number of nodes created / hide URL segments / hide not created nodes from the Umbraco back office";Copyright="DotSee Web Services S.A. 2023"'
-    verbosityPack: Detailed
+    configuration: "$(BuildConfiguration)"
+    packDirectory: "$(Build.ArtifactStagingDirectory)"
+    nobuild: false
+    versioningScheme: "byEnvVar"
+    versionEnvVar: GitVersion_SemVer
 
 - task: NuGetCommand@2
-  displayName: 'NuGet push to LeNuget (dotsee)'
+  displayName: 'NuGet push to LeNuget (dotsee)' 
   inputs:
     command: push
     nuGetFeedType: external
     publishFeedCredentials: 'DotSee LeNuget Server (PROD)'
   enabled: false
 
-# - task: NuGetCommand@2
-#   displayName: 'NuGet push to Nuget.org'
-#   inputs:
-#     command: push
-#     nuGetFeedType: external
-#     publishFeedCredentials: Nuget.org
+- task: NuGetCommand@2
+  displayName: 'NuGet push to Nuget.org'
+  inputs: 
+    command: push
+    nuGetFeedType: external
+    publishFeedCredentials: Nuget.org
