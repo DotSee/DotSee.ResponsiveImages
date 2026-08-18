@@ -18,6 +18,9 @@ variables:
   RestoreBuildProjects: '**/dotsee.responsiveimages.csproj'
 
 steps:
+- checkout: self
+  fetchDepth: 0
+
 - task: DotNetCoreCLI@2
   displayName: Restore
   inputs:
@@ -34,6 +37,7 @@ steps:
 #     sourceGitRepositoryCloneDirectoryName: Discipline
 #     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
 #     destinationGitRepositoryPersonalAccessToken: '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'
+
 
 - task:  gitversion-setup@4
   displayName: "gitversion/setup"
