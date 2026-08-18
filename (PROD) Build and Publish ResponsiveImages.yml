@@ -35,10 +35,11 @@ steps:
 #     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
 #     destinationGitRepositoryPersonalAccessToken: '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'
 
-- task: gitversion-setup@4
-  displayName: gitversion/setup
+- task:  gitversion-setup@4
+  displayName: "gitversion/setup"
   inputs:
-    versionSpec: 5.12.0
+    versionSpec: '17.0.x'
+    nugetConfigPath: 'nuget.config'
   
 - task: gitversion-execute@4
   displayName: gitversion/execute
