@@ -98,7 +98,7 @@ steps:
     packagesToPack: src/DotSee.ResponsiveImages/DotSee.ResponsiveImages.csproj
     configuration: "$(BuildConfiguration)"
     packDirectory: "$(Build.ArtifactStagingDirectory)"
-    nobuild: true
+    nobuild: false
     versioningScheme: "byEnvVar"
     versionEnvVar: GitVersion_SemVer
 
