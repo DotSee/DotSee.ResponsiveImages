@@ -1,4 +1,3 @@
-# Use this in your staging branch
 trigger:
   batch: true
   branches:
@@ -16,10 +15,14 @@ pool:
 
 variables:
   RestoreBuildProjects: '**/dotsee.responsiveimages.csproj'
+  BuildConfiguration: "Release"
 
 steps:
 - checkout: self
   fetchDepth: 0
+  displayName: "Checkout solution"
+  persistCredentials: true
+  clean: true
 
 - task: DotNetCoreCLI@2
   displayName: Restore
@@ -38,18 +41,29 @@ steps:
 #     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
 #     destinationGitRepositoryPersonalAccessToken: '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'
 
+- task: NuGetToolInstaller@1
+  displayName: "Install 'Nuget' tool"
+  inputs:
+    versionSpec: "7.x"
+    checkLatest: true
 
 - task:  gitversion-setup@4
   displayName: "gitversion/setup"
   inputs:
-    versionSpec: 6.8.2
+    versionSpec: 6.x
+    preferLatestVersion: true
     nugetConfigPath: 'nuget.config'
   
 - task: gitversion-execute@4
   displayName: gitversion/execute
   inputs:
     configFilePath: src/gitversion.yml
-    updateAssemblyInfo: false
+    updateAssemblyInfo: true
+
+- script: |
+    echo $(GitVersion_SemVer)
+  displayName: "Print build version number"
+  name: version_print
 
 - task: GitTag@7
   displayName: 'GitTag '
@@ -68,10 +82,13 @@ steps:
     Authors: DotSee
     Company: 'Dotsee Web Services SA'
     PackageLicenseExpression: MIT
-    VersionNumber: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
-    FileVersionNumber: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
-    InformationalVersion: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
-    PackageVersion: '$(GitVersion.Major).$(GitVersion.Minor).$(GitVersion.Patch)'
+    VersionNumber: "$(GitVersion_SemVer)"
+    FileVersionNumber: "$(GitVersion_SemVer)"
+    InformationalVersion: "$(GitVersion_SemVer)"
+    PackageVersion: "$(GitVersion_SemVer)"
+    Product: "Responsive Images"
+    Copyright: "Copyright © $(date:YYYY) DotSee Web Services S.A."
+
 
 - task: DotNetCoreCLI@2
   displayName: 'dotnet pack'
@@ -79,10 +96,11 @@ steps:
     command: pack
     verbosityRestore: Detailed
     packagesToPack: src/DotSee.ResponsiveImages/DotSee.ResponsiveImages.csproj
-    versioningScheme: 'bySemVerBuildNumber'
-    versionEnvVar: 'GitVersion.SemVer'
-    buildProperties: 'Authors="DotSee Web Services";Owners="DotSee Web Services";Product="DotSee.ResponsiveImages";PackageLicenseExpression="MIT";MaintainerEmail="hello@dot-see.com";Description="A package enabing you to automatically create nodes / put restrictions on the number of nodes created / hide URL segments / hide not created nodes from the Umbraco back office";Copyright="DotSee Web Services S.A. 2023"'
-    verbosityPack: Detailed
+    configuration: "$(BuildConfiguration)"
+    packDirectory: "$(Build.ArtifactStagingDirectory)"
+    nobuild: true
+    versioningScheme: "byEnvVar"
+    versionEnvVar: GitVersion_SemVer
 
 - task: NuGetCommand@2
   displayName: 'NuGet push to LeNuget (dotsee)'
