@@ -32,14 +32,14 @@ steps:
     verbosityRestore: Detailed
     verbosityPack: Detailed
 
-# - task: swellaby.mirror-git-repository.mirror-git-repository-vsts-task.mirror-git-repository-vsts-task@1
-#   displayName: 'Mirror Git Repository to https://github.com/DotSee/DotSee.ResponsiveImages'
-#   inputs:
-#     sourceGitRepositoryUri: 'https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages'
-#     sourceGitRepositoryPersonalAccessToken: 4iayLLNN6KfaJnPRXyXlOK38MYkD4CKXi2SzpRDnadzvKb5JeEEAJQQJ99BEACAAAAAM3hCKAAASAZDOKRCS
-#     sourceGitRepositoryCloneDirectoryName: Discipline
-#     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
-#     destinationGitRepositoryPersonalAccessToken: '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'
+- task: mirror-git-repository-vsts-task@1
+  displayName: "Mirror Git Repository to https://github.com/DotSee/DotSee.ResponsiveImages"
+  inputs:
+    sourceGitRepositoryUri: 'https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages'
+    sourceGitRepositoryPersonalAccessToken: 4iayLLNN6KfaJnPRXyXlOK38MYkD4CKXi2SzpRDnadzvKb5JeEEAJQQJ99BEACAAAAAM3hCKAAASAZDOKRCS
+    sourceGitRepositoryCloneDirectoryName: DotSee.ResponsiveImages
+    destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
+    destinationGitRepositoryPersonalAccessToken: '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'
 
 - task: NuGetToolInstaller@1
   displayName: "Install 'Nuget' tool"
