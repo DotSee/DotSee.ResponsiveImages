@@ -3,10 +3,10 @@ trigger:
   batch: true
   branches:
     include:
-      - staging
+      - master
     exclude:
       - develop
-      - master
+      - staging
 
 # Explicitly disable PR triggers if you only want the build to run POST-merge
 pr: none
