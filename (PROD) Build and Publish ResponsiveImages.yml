@@ -57,7 +57,7 @@ steps:
 - task: gitversion-execute@4
   displayName: gitversion/execute
   inputs:
-    configFilePath: src/gitversion.yml
+    # configFilePath: src/gitversion.yml
     updateAssemblyInfo: true
 
 - script: |
