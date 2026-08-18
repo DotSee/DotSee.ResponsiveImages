@@ -110,9 +110,9 @@ steps:
     publishFeedCredentials: 'DotSee LeNuget Server (PROD)'
   enabled: false
 
-# - task: NuGetCommand@2
-#   displayName: 'NuGet push to Nuget.org'
-#   inputs:
-#     command: push
-#     nuGetFeedType: external
-#     publishFeedCredentials: Nuget.org
+- task: NuGetCommand@2
+  displayName: 'NuGet push to Nuget.org'
+  inputs:
+    command: push
+    nuGetFeedType: external
+    publishFeedCredentials: Nuget.org
