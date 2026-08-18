@@ -1,15 +1,9 @@
-workflow: ''
-
-mode: ContinuousDelivery
-
-strategies:
-  - ConfiguredNextVersion
-  - Mainline
+workflow: TrunkBased/preview1
 
 branches:
   main:
     regex: ^master$|^main$
-    mode: ContinuousDelivery
+    mode: ContinuousDeployment
     label: ''
     increment: Patch
     prevent-increment:
@@ -20,7 +14,7 @@ branches:
     is-main-branch: true
 
   release:
-    regex: ^releases?[/-]
+    regex: ^release[/-]
     mode: ContinuousDelivery
     label: ''
     increment: None
