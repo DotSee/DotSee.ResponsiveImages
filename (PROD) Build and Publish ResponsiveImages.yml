@@ -1,25 +1,8 @@
 pool:
   name: Default
-#Your build pipeline references an undefined variable named ‘GitVersion.Major’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Minor’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Patch’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Major’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Minor’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Patch’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Major’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Minor’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Patch’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Major’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Minor’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Patch’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Major’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Minor’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Patch’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Major’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Minor’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
-#Your build pipeline references an undefined variable named ‘GitVersion.Patch’. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab. See https://go.microsoft.com/fwlink/?linkid=865972
+
 variables:
-  RestoreBuildProjects: '**/dotsee.discipline.csproj'
+  RestoreBuildProjects: '**/dotsee.responsiveimages.csproj'
 
 steps:
 - task: DotNetCoreCLI@2
@@ -78,9 +61,9 @@ steps:
   inputs:
     command: pack
     verbosityRestore: Detailed
-    packagesToPack: src/DotSee.Discipline/DotSee.Discipline.csproj
+    packagesToPack: src/DotSee.ResponsiveImages/DotSee.ResponsiveImages.csproj
     versioningScheme: byBuildNumber
-    buildProperties: 'Authors="DotSee Web Services";Owners="DotSee Web Services";Product="DotSee.Discipline";PackageLicenseExpression="MIT";MaintainerEmail="hello@dot-see.com";Description="A package enabing you to automatically create nodes / put restrictions on the number of nodes created / hide URL segments / hide not created nodes from the Umbraco back office";Copyright="DotSee Web Services S.A. 2023"'
+    buildProperties: 'Authors="DotSee Web Services";Owners="DotSee Web Services";Product="DotSee.ResponsiveImages";PackageLicenseExpression="MIT";MaintainerEmail="hello@dot-see.com";Description="A package enabing you to automatically create nodes / put restrictions on the number of nodes created / hide URL segments / hide not created nodes from the Umbraco back office";Copyright="DotSee Web Services S.A. 2023"'
     verbosityPack: Detailed
 
 - task: NuGetCommand@2
