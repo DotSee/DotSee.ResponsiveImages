@@ -65,11 +65,11 @@ to the edge.
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md)
-- [Configuration reference](docs/configuration.md)
-- [Tag helpers](docs/tag-helpers.md)
-- [Razor API](docs/razor-api.md)
-- [Lazy loading & LQIP](docs/lazy-loading.md)
+- [Getting started](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/getting-started.md)
+- [Configuration reference](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/configuration.md)
+- [Tag helpers](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/tag-helpers.md)
+- [Razor API](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/razor-api.md)
+- [Lazy loading & LQIP](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/lazy-loading.md)
 
 ## License
 
