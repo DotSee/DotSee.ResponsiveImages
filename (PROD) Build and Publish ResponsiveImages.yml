@@ -36,10 +36,10 @@ steps:
   displayName: "Mirror Git Repository to https://github.com/DotSee/DotSee.ResponsiveImages"
   inputs:
     sourceGitRepositoryUri: 'https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages'
-    sourceGitRepositoryPersonalAccessToken: 4iayLLNN6KfaJnPRXyXlOK38MYkD4CKXi2SzpRDnadzvKb5JeEEAJQQJ99BEACAAAAAM3hCKAAASAZDOKRCS
+    sourceGitRepositoryPersonalAccessToken: $(GithubPat)
     sourceGitRepositoryCloneDirectoryName: DotSee.ResponsiveImages
     destinationGitRepositoryUri: 'https://github.com/DotSee/DotSee.ResponsiveImages'
-    destinationGitRepositoryPersonalAccessToken: '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'
+    destinationGitRepositoryPersonalAccessToken: '$(DevOpsPat)'
 
 - task: NuGetToolInstaller@1
   displayName: "Install 'Nuget' tool"
