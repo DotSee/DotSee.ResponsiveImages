@@ -18,11 +18,14 @@
 		<PackageTags>umbraco;umbraco-cms;umbraco-marketplace;responsive-images;srcset;picture;lazy-loading;lqip;cloudflare</PackageTags>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<!-- The Marketplace fetches umbraco-marketplace.json over HTTP from
+		<PackageIcon>icon.png</PackageIcon>
+		<!-- Both point at the public GitHub mirror, not the Azure DevOps origin we actually push to.
+		     The Umbraco Marketplace fetches umbraco-marketplace.json over HTTP from
 		     {PackageProjectUrl}/umbraco-marketplace.json (the root of a GitHub default branch), never from
-		     inside the .nupkg. So this points at the GitHub mirror, not the Azure DevOps origin below. -->
+		     inside the .nupkg; and it only resolves a "Source repository" link, contributor sync and repo
+		     statistics from a RepositoryUrl it recognises as GitHub. -->
 		<PackageProjectUrl>https://github.com/DotSee/DotSee.ResponsiveImages</PackageProjectUrl>
-		<RepositoryUrl>https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages</RepositoryUrl>
+		<RepositoryUrl>https://github.com/DotSee/DotSee.ResponsiveImages</RepositoryUrl>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<!-- The XML doc comments are extensive but deliberately partial: they explain the non-obvious,
 		     not every parameter. Missing-comment warnings would drown the build output. -->
@@ -41,6 +44,7 @@
 
 	<ItemGroup>
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
+		<None Include="icon.png" Pack="true" PackagePath="\" />
 		<!-- JSON schema for appsettings IntelliSense. Copied to the consumer's project root by the
 		     targets file below, where their appsettings-schema.json can $ref it. -->
 		<None Include="schema\appsettings-schema.DotSee.ResponsiveImages.json" PackagePath="content\DotSee.ResponsiveImages.Schema">
