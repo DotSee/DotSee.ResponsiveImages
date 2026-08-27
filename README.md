@@ -9,8 +9,10 @@ Responsive images for **Umbraco CMS 17**, driven entirely by configuration:
 - CSP-safe rendering via a `nonce` attribute
 - `<link rel="preload">` hints for the LCP image (`<ds:preloads>`)
 - Crops anchored on the **focal point the editor set in the backoffice**
-- Optional [Cloudflare image transformation](docs/configuration.md#cloudflare-image-transformations) URLs (`/cdn-cgi/image/…`) so resizing happens at the edge instead of on your origin
+- Optional [Cloudflare image transformation](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/docs/configuration.md#cloudflare-image-transformations) URLs (`/cdn-cgi/image/…`) so resizing happens at the edge instead of on your origin
 - Optional CDN cache purging when media changes
+- Rendered markup and resolved rule sets are cached, and invalidated automatically when content or media changes — including through the cache refreshers that reach every node in a load-balanced setup
+- A JSON schema for full `appsettings.json` IntelliSense, and auto-registration through an Umbraco composer
 
 ## Quick start
 
@@ -65,14 +67,14 @@ to the edge.
 
 ## Documentation
 
-- [Getting started](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/getting-started.md)
-- [Configuration reference](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/configuration.md)
-- [Tag helpers](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/tag-helpers.md)
-- [Razor API](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/razor-api.md)
-- [Lazy loading & LQIP](https://github.com/DotSee/DotSee.ResponsiveImages/blob/azure-pipelinesprodpublish/docs/lazy-loading.md)
+- [Getting started](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/docs/getting-started.md)
+- [Configuration reference](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/docs/configuration.md)
+- [Tag helpers](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/docs/tag-helpers.md)
+- [Razor API](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/docs/razor-api.md)
+- [Lazy loading & LQIP](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/docs/lazy-loading.md)
 
 ## License
 
-[MIT](LICENSE). Note: the package references [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp)
+[MIT](https://github.com/DotSee/DotSee.ResponsiveImages/blob/master/LICENSE). Note: the package references [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp)
 (Six Labors Split License) for building inline LQIP placeholders — review Six Labors' licensing terms
 for your own use of ImageSharp.
