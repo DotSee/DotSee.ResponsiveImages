@@ -13,9 +13,15 @@
 		<Authors>Sotiris Filippidis</Authors>
 		<Company>DotSee Web Services</Company>
 		<Description>Responsive images for Umbraco CMS: picture elements, img srcset/sizes, responsive CSS background images, native lazy loading with LQIP placeholders, focal-point-aware crops, and optional Cloudflare image transformation URLs. No runtime JavaScript dependency.</Description>
-		<PackageTags>umbraco;umbraco-cms;responsive-images;srcset;picture;lazy-loading;lqip;cloudflare</PackageTags>
+		<!-- "umbraco-marketplace" is the tag the Umbraco Marketplace scans NuGet for; without it the
+		     package is never indexed, no matter what else the metadata says. -->
+		<PackageTags>umbraco;umbraco-cms;umbraco-marketplace;responsive-images;srcset;picture;lazy-loading;lqip;cloudflare</PackageTags>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<!-- The Marketplace fetches umbraco-marketplace.json over HTTP from
+		     {PackageProjectUrl}/umbraco-marketplace.json (the root of a GitHub default branch), never from
+		     inside the .nupkg. So this points at the GitHub mirror, not the Azure DevOps origin below. -->
+		<PackageProjectUrl>https://github.com/DotSee/DotSee.ResponsiveImages</PackageProjectUrl>
 		<RepositoryUrl>https://dev.azure.com/DotSeeWebServices/_git/DotSee.ResponsiveImages</RepositoryUrl>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<!-- The XML doc comments are extensive but deliberately partial: they explain the non-obvious,
